@@ -3,26 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ReActure - Disaster Rescue Simulation</title>
+    <title>ReActure - BeReal for the Future</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="gameContainer">
-        <!-- Start Screen -->
-        <div id="startScreen">
+        <!-- Homepage -->
+        <div id="homepage">
+            <div class="homepageContent">
+                <div class="heroSection">
+                    <h1 class="gameTitle">ReActure</h1>
+                    <p class="tagline">"BeReal for the Future"</p>
+                    <p class="subtagline">One world. One moment. Infinite reactions.</p>
+                </div>
+                
+                <div class="dailyChallenge" id="dailyChallenge">
+                    <div class="challengeIcon">⚠️</div>
+                    <h2 id="challengeTitle">Today's Reacture Moment</h2>
+                    <p id="challengeDescription">A meteor just hit the Pacific. React now or miss out.</p>
+                    <div id="challengeTimer" class="challengeTimer">
+                        <span id="timeRemaining">Loading...</span>
+                    </div>
+                </div>
+                
+                <div class="streakDisplay">
+                    <div class="streakIcon">🔥</div>
+                    <div class="streakInfo">
+                        <span class="streakLabel">Current Streak</span>
+                        <span class="streakValue" id="streakValue">0 days</span>
+                    </div>
+                </div>
+                
+                <div class="quickStats">
+                    <div class="statCard">
+                        <div class="statIcon">🏆</div>
+                        <div class="statValue" id="totalPoints">0</div>
+                        <div class="statLabel">Total Points</div>
+                    </div>
+                    <div class="statCard">
+                        <div class="statIcon">🤝</div>
+                        <div class="statValue" id="friendsCount">0</div>
+                        <div class="statLabel">Friends</div>
+                    </div>
+                    <div class="statCard">
+                        <div class="statIcon">⏱️</div>
+                        <div class="statValue" id="avgTime">0:00</div>
+                        <div class="statLabel">Avg. Time</div>
+                    </div>
+                </div>
+                
+                <div class="actionButtons">
+                    <button id="playNowBtn" class="primaryBtn">⚡ Play Now</button>
+                    <button id="viewLeaderboardBtn" class="secondaryBtn">📊 Leaderboard</button>
+                </div>
+                
+                <p class="signInPrompt">Not logged in? <a href="#" id="signInLink">Sign In</a></p>
+            </div>
+        </div>
+        
+        <!-- Sign In / Sign Up Screen -->
+        <div id="authScreen" class="hidden">
+            <div class="authContent">
+                <h1 class="gameTitle">ReActure</h1>
+                <p class="authSubtitle">Sign in to start your journey</p>
+                
+                <div id="signInForm" class="authForm">
+                    <h2>Sign In</h2>
+                    <input type="text" id="signInUsername" placeholder="Enter your username" class="authInput">
+                    <button id="signInBtn" class="primaryBtn">Sign In</button>
+                    <p class="switchAuth">New here? <a href="#" id="switchToSignUp">Create Account</a></p>
+                </div>
+                
+                <div id="signUpForm" class="authForm hidden">
+                    <h2>Create Account</h2>
+                    <input type="text" id="signUpUsername" placeholder="Choose a username" class="authInput">
+                    <input type="text" id="signUpDisplayName" placeholder="Your display name" class="authInput">
+                    <button id="signUpBtn" class="primaryBtn">Create Account</button>
+                    <p class="switchAuth">Already have an account? <a href="#" id="switchToSignIn">Sign In</a></p>
+                </div>
+                
+                <button id="backToHomeBtn" class="backBtn">← Back to Home</button>
+            </div>
+        </div>
+        
+        <!-- Environment Selection Screen -->
+        <div id="environmentScreen" class="hidden">
+            <div class="envContent">
+                <h1 class="envTitle">Choose Your Environment</h1>
+                <p class="envSubtitle">Select the disaster scenario to simulate</p>
+                
+                <div class="environmentGrid">
+                    <div class="envCard" data-env="earthquake">
+                        <div class="envIcon">🏚️</div>
+                        <h3>Earthquake</h3>
+                        <p>Buildings collapsed. Navigate unstable rubble and rescue victims from destroyed structures.</p>
+                        <div class="envStats">
+                            <span>⚠️ High Damage Risk</span>
+                            <span>🧱 Heavy Rubble</span>
+                        </div>
+                    </div>
+                    
+                    <div class="envCard" data-env="tsunami">
+                        <div class="envIcon">🌊</div>
+                        <h3>Tsunami</h3>
+                        <p>Coastal flooding. Navigate water hazards and find victims in flooded areas.</p>
+                        <div class="envStats">
+                            <span>💧 Water Zones</span>
+                            <span>⚡ Fuel Drain</span>
+                        </div>
+                    </div>
+                    
+                    <div class="envCard" data-env="wildfire">
+                        <div class="envIcon">🔥</div>
+                        <h3>Wildfire</h3>
+                        <p>Spreading flames. Race against time through fire zones to save lives.</p>
+                        <div class="envStats">
+                            <span>🔥 Fire Damage</span>
+                            <span>⏱️ Time Pressure</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="backToMenuBtn" class="backBtn">← Back to Menu</button>
+            </div>
+        </div>
+        
+        <!-- Leaderboard Screen -->
+        <div id="leaderboardScreen" class="hidden">
+            <div class="leaderboardContent">
+                <h1 class="leaderboardTitle">🏆 Leaderboard</h1>
+                
+                <div class="leaderboardTabs">
+                    <button class="tabBtn active" data-tab="global">Global</button>
+                    <button class="tabBtn" data-tab="friends">Friends</button>
+                    <button class="tabBtn" data-tab="today">Today</button>
+                </div>
+                
+                <div class="leaderboardList" id="leaderboardList">
+                    <!-- Populated dynamically -->
+                </div>
+                
+                <button id="backFromLeaderboardBtn" class="backBtn">← Back to Menu</button>
+            </div>
+        </div>
+        
+        <!-- Mission Briefing Screen -->
+        <div id="startScreen" class="hidden">
             <div class="startContent">
                 <h1 class="gameTitle">ReActure</h1>
-                <p class="gameSubtitle">Disaster Rescue Simulation</p>
+                <p class="gameSubtitle" id="environmentName">Disaster Rescue Simulation</p>
                 <div class="missionBrief">
                     <h2>Mission Briefing</h2>
-                    <p>A disaster has struck. Multiple victims are trapped under rubble.</p>
+                    <p id="missionDescription">A disaster has struck. Multiple victims are trapped under rubble.</p>
                     <p>Your mission: Rescue all victims before their health depletes.</p>
                     <ul class="missionList">
                         <li>🔍 Locate victims trapped under rubble</li>
                         <li>💥 Destroy rubble to clear paths (Space key)</li>
                         <li>⚡ Manage your fuel and health</li>
-                        <li>⚠️ Avoid red zones and navigate yellow zones carefully</li>
-                        <li>⛽ Refuel at the blue station when needed (R key)</li>
+                        <li>⚠️ Avoid hazard zones carefully</li>
+                        <li>⛽ Refuel at the station when needed (R key)</li>
+                        <li>🦘 Jump over obstacles (Space while moving)</li>
                     </ul>
                 </div>
                 <div class="controlsInfo">
@@ -38,7 +178,7 @@
                         </div>
                         <div class="controlItem">
                             <kbd>Space</kbd>
-                            <span>Destroy Rubble</span>
+                            <span>Jump / Destroy</span>
                         </div>
                         <div class="controlItem">
                             <kbd>R</kbd>
@@ -67,6 +207,11 @@
                     <span class="statIcon">🚨</span>
                     <span class="label">Remaining:</span>
                     <span id="remainingCount" class="statValue">0</span>
+                </div>
+                <div class="stat stat-points">
+                    <span class="statIcon">🏆</span>
+                    <span class="label">Score:</span>
+                    <span id="scoreValue" class="statValue">0</span>
                 </div>
             </div>
             
@@ -154,11 +299,13 @@
         
         <div id="gameOverScreen" class="hidden">
             <div class="gameOverContent">
-                <h1>Mission Complete</h1>
+                <h1 id="gameOverTitle">Mission Complete</h1>
                 <div id="gameOverStats"></div>
+                <div id="scoreBreakdown" class="scoreBreakdown"></div>
                 <div class="buttonGroup">
-                    <button id="restartBtn" class="primaryBtn">Restart Mission</button>
-                    <button id="downloadLogsBtn" class="secondaryBtn">📥 Download Data Logs</button>
+                    <button id="restartBtn" class="primaryBtn">Play Again</button>
+                    <button id="downloadLogsBtn" class="secondaryBtn">📥 Download Data</button>
+                    <button id="backToMenuFromGame" class="secondaryBtn">🏠 Main Menu</button>
                 </div>
             </div>
         </div>

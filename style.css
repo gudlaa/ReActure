@@ -34,6 +34,581 @@ body {
     display: none;
 }
 
+/* Homepage */
+#homepage {
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+    pointer-events: auto;
+    animation: fadeIn 0.5s ease-in;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+#homepage.hidden {
+    display: none;
+}
+
+.homepageContent {
+    max-width: 900px;
+    width: 100%;
+    text-align: center;
+}
+
+.heroSection {
+    margin-bottom: 40px;
+}
+
+.tagline {
+    font-size: 28px;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 20px 0 10px;
+    font-style: italic;
+}
+
+.subtagline {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 40px;
+}
+
+.dailyChallenge {
+    background: rgba(255, 87, 34, 0.1);
+    border: 3px solid rgba(255, 87, 34, 0.5);
+    border-radius: 20px;
+    padding: 30px;
+    margin: 30px 0;
+    position: relative;
+    overflow: hidden;
+    animation: challengePulse 2s ease-in-out infinite;
+}
+
+@keyframes challengePulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 87, 34, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(255, 87, 34, 0.6); }
+}
+
+.challengeIcon {
+    font-size: 48px;
+    margin-bottom: 15px;
+    animation: shake 1s ease-in-out infinite;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px) rotate(-5deg); }
+    75% { transform: translateX(5px) rotate(5deg); }
+}
+
+.dailyChallenge h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 28px;
+    color: #ff5722;
+    margin-bottom: 15px;
+}
+
+.dailyChallenge p {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 20px;
+}
+
+.challengeTimer {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 36px;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.streakDisplay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    background: rgba(255, 152, 0, 0.1);
+    border: 2px solid rgba(255, 152, 0, 0.3);
+    border-radius: 15px;
+    padding: 20px 40px;
+    margin: 30px auto;
+    max-width: 400px;
+}
+
+.streakIcon {
+    font-size: 48px;
+    animation: flame 1.5s ease-in-out infinite;
+}
+
+@keyframes flame {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.streakInfo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.streakLabel {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.streakValue {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 32px;
+    font-weight: bold;
+    color: #ff9800;
+}
+
+.quickStats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin: 40px 0;
+}
+
+.statCard {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 25px;
+    transition: all 0.3s;
+}
+
+.statCard:hover {
+    transform: translateY(-5px);
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.statCard .statIcon {
+    font-size: 36px;
+    margin-bottom: 15px;
+}
+
+.statCard .statValue {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 32px;
+    font-weight: bold;
+    color: #667eea;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.statCard .statLabel {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.actionButtons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin: 40px 0;
+}
+
+.signInPrompt {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 16px;
+    margin-top: 30px;
+}
+
+.signInPrompt a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+.signInPrompt a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+}
+
+/* Auth Screen */
+#authScreen {
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+    pointer-events: auto;
+    animation: fadeIn 0.5s ease-in;
+}
+
+#authScreen.hidden {
+    display: none;
+}
+
+.authContent {
+    background: rgba(20, 20, 30, 0.95);
+    padding: 50px;
+    border-radius: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+}
+
+.authSubtitle {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 30px;
+}
+
+.authForm {
+    margin: 30px 0;
+}
+
+.authForm h2 {
+    font-family: 'Orbitron', sans-serif;
+    color: #667eea;
+    margin-bottom: 25px;
+    font-size: 24px;
+}
+
+.authInput {
+    width: 100%;
+    padding: 15px;
+    margin: 15px 0;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    font-size: 16px;
+    font-family: 'Roboto', sans-serif;
+    transition: all 0.3s;
+}
+
+.authInput:focus {
+    outline: none;
+    border-color: #667eea;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.authInput::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.switchAuth {
+    margin-top: 20px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}
+
+.switchAuth a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.switchAuth a:hover {
+    text-decoration: underline;
+}
+
+.backBtn {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: 'Roboto', sans-serif;
+    transition: all 0.3s;
+    margin-top: 20px;
+}
+
+.backBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: white;
+}
+
+/* Environment Selection Screen */
+#environmentScreen {
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+    pointer-events: auto;
+    animation: fadeIn 0.5s ease-in;
+    overflow-y: auto;
+    padding: 40px 20px;
+}
+
+#environmentScreen.hidden {
+    display: none;
+}
+
+.envContent {
+    max-width: 1200px;
+    width: 100%;
+    text-align: center;
+}
+
+.envTitle {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 48px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 15px;
+}
+
+.envSubtitle {
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 50px;
+}
+
+.environmentGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    margin: 40px 0;
+}
+
+.envCard {
+    background: rgba(20, 20, 30, 0.9);
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 40px 30px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+}
+
+.envCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, transparent 0%, rgba(102, 126, 234, 0.1) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.envCard:hover {
+    transform: translateY(-10px);
+    border-color: #667eea;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.envCard:hover::before {
+    opacity: 1;
+}
+
+.envCard[data-env="earthquake"]:hover {
+    border-color: #8B4513;
+}
+
+.envCard[data-env="tsunami"]:hover {
+    border-color: #2196F3;
+}
+
+.envCard[data-env="wildfire"]:hover {
+    border-color: #ff5722;
+}
+
+.envIcon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.envCard h3 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 28px;
+    color: white;
+    margin-bottom: 15px;
+}
+
+.envCard p {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.envStats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.envStats span {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 8px 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Leaderboard Screen */
+#leaderboardScreen {
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+    pointer-events: auto;
+    animation: fadeIn 0.5s ease-in;
+    overflow-y: auto;
+    padding: 40px 20px;
+}
+
+#leaderboardScreen.hidden {
+    display: none;
+}
+
+.leaderboardContent {
+    max-width: 800px;
+    width: 100%;
+    background: rgba(20, 20, 30, 0.95);
+    padding: 40px;
+    border-radius: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.leaderboardTitle {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 42px;
+    text-align: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 30px;
+}
+
+.leaderboardTabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.tabBtn {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: none;
+    padding: 15px 25px;
+    cursor: pointer;
+    font-size: 16px;
+    font-family: 'Roboto', sans-serif;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.tabBtn.active {
+    color: #667eea;
+}
+
+.tabBtn.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #667eea;
+}
+
+.tabBtn:hover {
+    color: white;
+}
+
+.leaderboardList {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.leaderboardItem {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    transition: all 0.3s;
+}
+
+.leaderboardItem:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(102, 126, 234, 0.5);
+}
+
+.leaderboardRank {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 24px;
+    font-weight: bold;
+    color: #667eea;
+    min-width: 40px;
+}
+
+.leaderboardItem:nth-child(1) .leaderboardRank {
+    color: #FFD700;
+    font-size: 32px;
+}
+
+.leaderboardItem:nth-child(2) .leaderboardRank {
+    color: #C0C0C0;
+}
+
+.leaderboardItem:nth-child(3) .leaderboardRank {
+    color: #CD7F32;
+}
+
+.leaderboardName {
+    flex: 1;
+    font-size: 18px;
+    color: white;
+    font-weight: 500;
+}
+
+.leaderboardScore {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 20px;
+    font-weight: bold;
+    color: #667eea;
+}
+
 /* Start Screen */
 #startScreen {
     position: relative;
@@ -262,6 +837,10 @@ body {
 
 .stat-warning {
     border-color: rgba(255, 193, 7, 0.5);
+}
+
+.stat-points {
+    border-color: rgba(255, 215, 0, 0.5);
 }
 
 .statValue {
@@ -547,6 +1126,39 @@ body {
     font-family: 'Orbitron', sans-serif;
 }
 
+.scoreBreakdown {
+    margin: 30px 0;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 12px;
+    border: 2px solid rgba(102, 126, 234, 0.3);
+}
+
+.scoreBreakdown h3 {
+    font-family: 'Orbitron', sans-serif;
+    color: #667eea;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.scoreBreakdown .scoreItem {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.scoreBreakdown .scoreItem:last-child {
+    border-bottom: none;
+    font-weight: bold;
+    font-size: 18px;
+    color: #667eea;
+    padding-top: 15px;
+    border-top: 2px solid rgba(102, 126, 234, 0.5);
+}
+
 .buttonGroup {
     display: flex;
     gap: 15px;
@@ -593,5 +1205,25 @@ body {
     #robotStats, #controls, #sensorDisplay {
         min-width: 240px;
         font-size: 12px;
+    }
+    
+    .quickStats {
+        grid-template-columns: 1fr;
+    }
+    
+    .environmentGrid {
+        grid-template-columns: 1fr;
+    }
+    
+    .actionButtons {
+        flex-direction: column;
+    }
+    
+    .envTitle {
+        font-size: 36px;
+    }
+    
+    .leaderboardTitle {
+        font-size: 32px;
     }
 }
