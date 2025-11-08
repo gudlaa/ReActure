@@ -1,0 +1,21 @@
+{
+  "name": "reacture",
+  "version": "1.0.0",
+  "description": "Disaster Rescue Simulation - Gamified Data Collection for AI Training",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "serve": "npx http-server -p 8000"
+  },
+  "keywords": [
+    "ai",
+    "data-collection",
+    "robotics",
+    "simulation",
+    "threejs",
+    "gamification"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+

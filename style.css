@@ -1,0 +1,597 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: #000;
+}
+
+#gameContainer {
+    position: relative;
+    width: 100vw;
+    min-height: 100vh;
+}
+
+#gameCanvas {
+    display: block;
+    width: 100%;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    cursor: none;
+    z-index: 1;
+}
+
+#gameCanvas.hidden {
+    display: none;
+}
+
+/* Start Screen */
+#startScreen {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    z-index: 2000;
+    pointer-events: auto;
+    animation: fadeIn 0.5s ease-in;
+    overflow-y: auto;
+}
+
+#startScreen.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.startContent {
+    background: rgba(20, 20, 30, 0.95);
+    padding: 50px;
+    border-radius: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    max-width: 800px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    margin: 40px auto;
+}
+
+.gameTitle {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 64px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 10px;
+    text-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+    from { filter: drop-shadow(0 0 10px rgba(102, 126, 234, 0.5)); }
+    to { filter: drop-shadow(0 0 20px rgba(118, 75, 162, 0.8)); }
+}
+
+.gameSubtitle {
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 30px;
+    font-weight: 300;
+}
+
+.missionBrief {
+    text-align: left;
+    margin: 30px 0;
+    color: white;
+}
+
+.missionBrief h2 {
+    font-family: 'Orbitron', sans-serif;
+    color: #667eea;
+    margin-bottom: 15px;
+    font-size: 24px;
+}
+
+.missionBrief p {
+    margin: 10px 0;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.missionList {
+    list-style: none;
+    margin: 20px 0;
+    padding: 0;
+}
+
+.missionList li {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.missionList li:last-child {
+    border-bottom: none;
+}
+
+.controlsInfo {
+    margin: 30px 0;
+    text-align: left;
+}
+
+.controlsInfo h3 {
+    font-family: 'Orbitron', sans-serif;
+    color: #667eea;
+    margin-bottom: 15px;
+    font-size: 20px;
+}
+
+.controlsGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.controlItem {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.controlItem kbd {
+    background: rgba(102, 126, 234, 0.3);
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: white;
+    border: 1px solid rgba(102, 126, 234, 0.5);
+}
+
+.controlItem span {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+}
+
+.primaryBtn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    margin-top: 30px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    font-family: 'Orbitron', sans-serif;
+    transition: all 0.3s;
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.primaryBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+}
+
+.primaryBtn:active {
+    transform: translateY(0);
+}
+
+/* Game UI */
+#ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 100;
+}
+
+#ui.hidden {
+    display: none;
+}
+
+#topBar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.stat {
+    background: rgba(0, 0, 0, 0.8);
+    padding: 12px 18px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    color: white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s;
+}
+
+.stat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.statIcon {
+    font-size: 20px;
+}
+
+.stat-primary {
+    border-color: rgba(102, 126, 234, 0.5);
+}
+
+.stat-success {
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+.stat-warning {
+    border-color: rgba(255, 193, 7, 0.5);
+}
+
+.statValue {
+    font-weight: bold;
+    font-family: 'Orbitron', sans-serif;
+    color: #fff;
+}
+
+#robotStats, .infoPanel {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 20px;
+    border-radius: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    min-width: 280px;
+}
+
+#robotStats {
+    top: 20px;
+    right: 20px;
+}
+
+.panelHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px;
+    color: #667eea;
+    font-weight: bold;
+    border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+    padding-bottom: 10px;
+}
+
+.panelIcon {
+    font-size: 20px;
+}
+
+.barContainer {
+    margin-bottom: 20px;
+}
+
+.barLabel {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.barValue {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.bar {
+    width: 100%;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.bar .fill {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 6px;
+    position: relative;
+    z-index: 2;
+}
+
+.healthBar .fill {
+    background: linear-gradient(90deg, #4CAF50, #8BC34A, #CDDC39);
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+.fuelBar .fill {
+    background: linear-gradient(90deg, #2196F3, #03A9F4, #00BCD4);
+    box-shadow: 0 0 10px rgba(33, 150, 243, 0.5);
+}
+
+.barGlow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+    opacity: 0.3;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.healthGlow {
+    background: radial-gradient(circle, rgba(76, 175, 80, 0.6) 0%, transparent 70%);
+}
+
+.fuelGlow {
+    background: radial-gradient(circle, rgba(33, 150, 243, 0.6) 0%, transparent 70%);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+}
+
+#controls {
+    bottom: 20px;
+    left: 20px;
+    pointer-events: auto;
+}
+
+#sensorDisplay {
+    bottom: 20px;
+    right: 20px;
+}
+
+.controlList, .sensorList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.controlRow, .sensorRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.controlRow:last-child, .sensorRow:last-child {
+    border-bottom: none;
+}
+
+.controlRow kbd {
+    background: rgba(102, 126, 234, 0.3);
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: white;
+    border: 1px solid rgba(102, 126, 234, 0.5);
+    min-width: 50px;
+    text-align: center;
+}
+
+.controlRow span, .sensorLabel {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+}
+
+.sensorValue {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: bold;
+    color: #fff;
+    font-size: 13px;
+}
+
+.zone-safe {
+    color: #4CAF50;
+}
+
+.zone-yellow {
+    color: #FFEB3B;
+}
+
+.zone-red {
+    color: #f44336;
+}
+
+/* Crosshair */
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 50;
+}
+
+.crosshairDot {
+    width: 4px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+.crosshairLine {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+.crosshairH {
+    width: 20px;
+    height: 2px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.crosshairV {
+    width: 2px;
+    height: 20px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Game Over Screen */
+#gameOverScreen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    pointer-events: auto;
+    backdrop-filter: blur(5px);
+}
+
+#gameOverScreen.hidden {
+    display: none;
+}
+
+.gameOverContent {
+    background: rgba(20, 20, 30, 0.98);
+    padding: 50px;
+    border-radius: 20px;
+    border: 3px solid #667eea;
+    text-align: center;
+    color: white;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.gameOverContent h1 {
+    margin-bottom: 30px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 42px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+#gameOverStats {
+    margin: 30px 0;
+    text-align: left;
+    font-size: 18px;
+}
+
+#gameOverStats p {
+    margin: 15px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+    display: flex;
+    justify-content: space-between;
+}
+
+#gameOverStats strong {
+    color: #667eea;
+    font-family: 'Orbitron', sans-serif;
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 30px;
+}
+
+.secondaryBtn {
+    background: rgba(33, 150, 243, 0.8);
+    color: white;
+    border: 2px solid rgba(33, 150, 243, 0.5);
+    padding: 12px 24px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    font-family: 'Orbitron', sans-serif;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.secondaryBtn:hover {
+    background: rgba(33, 150, 243, 1);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(33, 150, 243, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .startContent {
+        padding: 30px;
+    }
+    
+    .gameTitle {
+        font-size: 48px;
+    }
+    
+    .controlsGrid {
+        grid-template-columns: 1fr;
+    }
+    
+    #robotStats, #controls, #sensorDisplay {
+        min-width: 240px;
+        font-size: 12px;
+    }
+}

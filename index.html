@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReActure - Disaster Rescue Simulation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- Start Screen -->
+        <div id="startScreen">
+            <div class="startContent">
+                <h1 class="gameTitle">ReActure</h1>
+                <p class="gameSubtitle">Disaster Rescue Simulation</p>
+                <div class="missionBrief">
+                    <h2>Mission Briefing</h2>
+                    <p>A disaster has struck. Multiple victims are trapped under rubble.</p>
+                    <p>Your mission: Rescue all victims before their health depletes.</p>
+                    <ul class="missionList">
+                        <li>🔍 Locate victims trapped under rubble</li>
+                        <li>💥 Destroy rubble to clear paths (Space key)</li>
+                        <li>⚡ Manage your fuel and health</li>
+                        <li>⚠️ Avoid red zones and navigate yellow zones carefully</li>
+                        <li>⛽ Refuel at the blue station when needed (R key)</li>
+                    </ul>
+                </div>
+                <div class="controlsInfo">
+                    <h3>Controls</h3>
+                    <div class="controlsGrid">
+                        <div class="controlItem">
+                            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+                            <span>Move</span>
+                        </div>
+                        <div class="controlItem">
+                            <kbd>Mouse</kbd>
+                            <span>Look Around</span>
+                        </div>
+                        <div class="controlItem">
+                            <kbd>Space</kbd>
+                            <span>Destroy Rubble</span>
+                        </div>
+                        <div class="controlItem">
+                            <kbd>R</kbd>
+                            <span>Refuel</span>
+                        </div>
+                    </div>
+                </div>
+                <button id="startBtn" class="primaryBtn">Start Mission</button>
+            </div>
+        </div>
+
+        <!-- Game UI -->
+        <div id="ui" class="hidden">
+            <div id="topBar">
+                <div class="stat stat-primary">
+                    <span class="statIcon">⏱️</span>
+                    <span class="label">Time:</span>
+                    <span id="timer" class="statValue">00:00</span>
+                </div>
+                <div class="stat stat-success">
+                    <span class="statIcon">✅</span>
+                    <span class="label">Saved:</span>
+                    <span id="savedCount" class="statValue">0</span>
+                </div>
+                <div class="stat stat-warning">
+                    <span class="statIcon">🚨</span>
+                    <span class="label">Remaining:</span>
+                    <span id="remainingCount" class="statValue">0</span>
+                </div>
+            </div>
+            
+            <div id="robotStats">
+                <div class="panelHeader">
+                    <span class="panelIcon">🤖</span>
+                    <span>Robot Status</span>
+                </div>
+                <div class="barContainer">
+                    <div class="barLabel">
+                        <span class="label">Health</span>
+                        <span id="robotHealthText" class="barValue">100%</span>
+                    </div>
+                    <div class="bar healthBar">
+                        <div id="robotHealth" class="fill"></div>
+                        <div class="barGlow healthGlow"></div>
+                    </div>
+                </div>
+                <div class="barContainer">
+                    <div class="barLabel">
+                        <span class="label">Fuel/Battery</span>
+                        <span id="robotFuelText" class="barValue">100%</span>
+                    </div>
+                    <div class="bar fuelBar">
+                        <div id="robotFuel" class="fill"></div>
+                        <div class="barGlow fuelGlow"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="controls" class="infoPanel">
+                <div class="panelHeader">
+                    <span class="panelIcon">⌨️</span>
+                    <span>Controls</span>
+                </div>
+                <div class="controlList">
+                    <div class="controlRow">
+                        <kbd>WASD</kbd>
+                        <span>Move</span>
+                    </div>
+                    <div class="controlRow">
+                        <kbd>Mouse</kbd>
+                        <span>Look</span>
+                    </div>
+                    <div class="controlRow">
+                        <kbd>Space</kbd>
+                        <span>Destroy</span>
+                    </div>
+                    <div class="controlRow">
+                        <kbd>R</kbd>
+                        <span>Refuel</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sensorDisplay" class="infoPanel">
+                <div class="panelHeader">
+                    <span class="panelIcon">📡</span>
+                    <span>Sensors</span>
+                </div>
+                <div id="sensorData" class="sensorList">
+                    <div class="sensorRow">
+                        <span class="sensorLabel">Proximity:</span>
+                        <span id="proximity" class="sensorValue">0.0m</span>
+                    </div>
+                    <div class="sensorRow">
+                        <span class="sensorLabel">Zone:</span>
+                        <span id="zoneType" class="sensorValue zone-safe">Safe</span>
+                    </div>
+                    <div class="sensorRow">
+                        <span class="sensorLabel">Victims:</span>
+                        <span id="victimsDetected" class="sensorValue">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="crosshair">
+                <div class="crosshairDot"></div>
+                <div class="crosshairLine crosshairH"></div>
+                <div class="crosshairLine crosshairV"></div>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" class="hidden"></canvas>
+        
+        <div id="gameOverScreen" class="hidden">
+            <div class="gameOverContent">
+                <h1>Mission Complete</h1>
+                <div id="gameOverStats"></div>
+                <div class="buttonGroup">
+                    <button id="restartBtn" class="primaryBtn">Restart Mission</button>
+                    <button id="downloadLogsBtn" class="secondaryBtn">📥 Download Data Logs</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="game.js"></script>
+</body>
+</html>
+
