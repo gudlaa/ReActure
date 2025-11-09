@@ -3,27 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ReActure - BeReal for the Future</title>
+    <title>ReActure - React for the Future</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="gameContainer">
         <!-- Homepage -->
         <div id="homepage">
+            <!-- Logout Button (Top Right) -->
+            <button id="logoutBtn" class="logoutBtnCorner hidden">🚪 Logout</button>
+            
             <div class="homepageContent">
                 <div class="heroSection">
                     <h1 class="gameTitle">ReActure</h1>
-                    <p class="tagline">"BeReal for the Future"</p>
-                    <p class="subtagline">One world. One moment. Infinite reactions.</p>
-                </div>
-                
-                <div class="dailyChallenge" id="dailyChallenge">
-                    <div class="challengeIcon">⚠️</div>
-                    <h2 id="challengeTitle">Today's Reacture Moment</h2>
-                    <p id="challengeDescription">A meteor just hit the Pacific. React now or miss out.</p>
-                    <div id="challengeTimer" class="challengeTimer">
-                        <span id="timeRemaining">Loading...</span>
-                    </div>
+                    <p class="tagline">"React for the Future"</p>
                 </div>
                 
                 <div class="streakDisplay">
@@ -55,6 +48,7 @@
                 <div class="actionButtons">
                     <button id="playNowBtn" class="primaryBtn">⚡ Play Now</button>
                     <button id="viewLeaderboardBtn" class="secondaryBtn">📊 Leaderboard</button>
+                    <button id="friendsBtn" class="secondaryBtn">👥 Friends</button>
                     <button id="notificationsBtn" class="secondaryBtn">🔔 Notifications <span id="notificationBadge" class="notifBadge">0</span></button>
                 </div>
                 
@@ -83,6 +77,37 @@
                     <!-- Populated dynamically -->
                 </div>
                 <button id="backFromNotifications" class="backBtn">← Back</button>
+            </div>
+        </div>
+        
+        <!-- Friends Screen -->
+        <div id="friendsScreen" class="hidden">
+            <div class="friendsContent">
+                <h1>👥 Friends</h1>
+                
+                <div class="addFriendSection">
+                    <input type="text" id="friendUsernameInput" placeholder="Enter friend's username" class="authInput">
+                    <button id="addFriendBtn" class="primaryBtn">➕ Add Friend</button>
+                </div>
+                
+                <div class="friendsTabs">
+                    <button id="friendsListTab" class="tabBtn active">Friends List</button>
+                    <button id="friendRequestsTab" class="tabBtn">Requests <span id="requestsBadge" class="requestsBadge">0</span></button>
+                </div>
+                
+                <div id="friendsListSection" class="friendsSection">
+                    <div id="friendsList" class="friendsList">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                
+                <div id="friendRequestsSection" class="friendsSection hidden">
+                    <div id="friendRequestsList" class="friendRequestsList">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                
+                <button id="backFromFriends" class="backBtn">← Back</button>
             </div>
         </div>
         
@@ -378,7 +403,7 @@
                 <div id="shareSection" class="shareSection">
                     <h3>Share Your Results</h3>
                     <button id="shareTwitterBtn" class="shareBtn">🐦 Share on Twitter</button>
-                    <button id="shareFacebookBtn" class="shareBtn">📘 Share on Facebook</button>
+                    <button id="shareInstagramBtn" class="shareBtn">📸 Share on Instagram</button>
                     <button id="copyResultsBtn" class="shareBtn">📋 Copy Summary</button>
                 </div>
                 <div class="buttonGroup">

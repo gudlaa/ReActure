@@ -37,7 +37,10 @@ class UserManager {
             streak: 0,
             lastPlayed: null,
             friends: [],
-            history: []
+            friendRequests: [],
+            sentRequests: [],
+            history: [],
+            dailyChallengeCompleted: null
         };
         
         localStorage.setItem('reacture_users', JSON.stringify(users));
@@ -134,6 +137,116 @@ class UserManager {
         return users
             .sort((a, b) => b.totalPoints - a.totalPoints)
             .slice(0, 20);
+    }
+    
+    // Friends Management
+    sendFriendRequest(friendUsername) {
+        if (!this.currentUser) return { success: false, message: 'Not logged in' };
+        if (friendUsername === this.currentUser.username) {
+            return { success: false, message: 'Cannot add yourself' };
+        }
+        
+        const friend = this.getUser(friendUsername);
+        if (!friend) {
+            return { success: false, message: 'User not found' };
+        }
+        
+        if (this.currentUser.friends.includes(friendUsername)) {
+            return { success: false, message: 'Already friends' };
+        }
+        
+        if (this.currentUser.sentRequests && this.currentUser.sentRequests.includes(friendUsername)) {
+            return { success: false, message: 'Request already sent' };
+        }
+        
+        // Add to current user's sent requests
+        if (!this.currentUser.sentRequests) this.currentUser.sentRequests = [];
+        this.currentUser.sentRequests.push(friendUsername);
+        this.saveUser();
+        
+        // Add to friend's received requests
+        if (!friend.friendRequests) friend.friendRequests = [];
+        friend.friendRequests.push(this.currentUser.username);
+        const users = JSON.parse(localStorage.getItem('reacture_users') || '{}');
+        users[friendUsername] = friend;
+        localStorage.setItem('reacture_users', JSON.stringify(users));
+        
+        return { success: true, message: 'Friend request sent!' };
+    }
+    
+    acceptFriendRequest(friendUsername) {
+        if (!this.currentUser) return { success: false };
+        
+        const friend = this.getUser(friendUsername);
+        if (!friend) return { success: false };
+        
+        // Initialize arrays if needed
+        if (!this.currentUser.friendRequests) this.currentUser.friendRequests = [];
+        if (!this.currentUser.friends) this.currentUser.friends = [];
+        if (!friend.sentRequests) friend.sentRequests = [];
+        if (!friend.friends) friend.friends = [];
+        
+        // Remove from requests
+        this.currentUser.friendRequests = this.currentUser.friendRequests.filter(u => u !== friendUsername);
+        friend.sentRequests = friend.sentRequests.filter(u => u !== this.currentUser.username);
+        
+        // Add to friends lists
+        this.currentUser.friends.push(friendUsername);
+        friend.friends.push(this.currentUser.username);
+        
+        // Save both users
+        this.saveUser();
+        const users = JSON.parse(localStorage.getItem('reacture_users') || '{}');
+        users[friendUsername] = friend;
+        localStorage.setItem('reacture_users', JSON.stringify(users));
+        
+        return { success: true };
+    }
+    
+    declineFriendRequest(friendUsername) {
+        if (!this.currentUser) return { success: false };
+        
+        const friend = this.getUser(friendUsername);
+        if (!friend) return { success: false };
+        
+        // Initialize arrays if needed
+        if (!this.currentUser.friendRequests) this.currentUser.friendRequests = [];
+        if (!friend.sentRequests) friend.sentRequests = [];
+        
+        // Remove from requests
+        this.currentUser.friendRequests = this.currentUser.friendRequests.filter(u => u !== friendUsername);
+        friend.sentRequests = friend.sentRequests.filter(u => u !== this.currentUser.username);
+        
+        // Save both users
+        this.saveUser();
+        const users = JSON.parse(localStorage.getItem('reacture_users') || '{}');
+        users[friendUsername] = friend;
+        localStorage.setItem('reacture_users', JSON.stringify(users));
+        
+        return { success: true };
+    }
+    
+    removeFriend(friendUsername) {
+        if (!this.currentUser) return { success: false };
+        
+        const friend = this.getUser(friendUsername);
+        if (!friend) return { success: false };
+        
+        // Initialize arrays if needed
+        if (!this.currentUser.friends) this.currentUser.friends = [];
+        if (!friend.friends) friend.friends = [];
+        
+        // Remove from friends lists
+        this.currentUser.friends = this.currentUser.friends.filter(u => u !== friendUsername);
+        friend.friends = friend.friends.filter(u => u !== this.currentUser.username);
+        
+        // Save both users
+        this.saveUser();
+        const users = JSON.parse(localStorage.getItem('reacture_users') || '{}');
+        users[friendUsername] = friend;
+        localStorage.setItem('reacture_users', JSON.stringify(users));
+        
+        return { success: true };
     }
 }
 
@@ -481,8 +594,8 @@ const groundMaterial = new THREE.MeshStandardMaterial({
         color: env === 'wildfire' ? envConfig.groundColor : 0x4a7c34, // Green grass for most environments
         roughness: 0.95,
         metalness: 0.05
-    });
-    
+});
+
     // Add natural terrain variation
 const positions = groundGeometry.attributes.position;
 for (let i = 0; i < positions.count; i++) {
@@ -523,8 +636,8 @@ function createSky(env) {
     // Update fog
     scene.fog.color.setHex(envConfig.fogColor);
     scene.background.setHex(envConfig.skyColor);
-}
-
+    }
+    
 // ========================================
 // ROBOT
 // ========================================
@@ -888,24 +1001,24 @@ const handleKeyDown = (event) => {
     
     switch (event.code) {
         case 'KeyW':
-            moveForward = true;
+                moveForward = true;
             console.log('✅ W pressed - Move forward =', moveForward);
-            logPlayerAction('move_forward_start');
+                    logPlayerAction('move_forward_start');
             break;
         case 'KeyA':
-            moveLeft = true;
+                moveLeft = true;
             console.log('✅ A pressed - Move left =', moveLeft);
-            logPlayerAction('move_left_start');
+                    logPlayerAction('move_left_start');
             break;
         case 'KeyS':
-            moveBackward = true;
+                moveBackward = true;
             console.log('✅ S pressed - Move backward =', moveBackward);
-            logPlayerAction('move_backward_start');
+                    logPlayerAction('move_backward_start');
             break;
         case 'KeyD':
-            moveRight = true;
+                moveRight = true;
             console.log('✅ D pressed - Move right =', moveRight);
-            logPlayerAction('move_right_start');
+                    logPlayerAction('move_right_start');
             break;
         case 'Space':
             event.preventDefault();
@@ -919,7 +1032,7 @@ const handleKeyDown = (event) => {
             break;
         case 'KeyR':
             console.log('✅ R pressed - Refuel attempt');
-            refuel();
+                refuel();
             break;
         case 'KeyE':
             console.log('✅ E pressed - Inspect mode (X-ray vision)');
@@ -1003,7 +1116,7 @@ document.addEventListener('pointerlockchange', () => {
         console.log('❌ Pointer unlocked - Click to enable mouse look');
         if (prompt && gameState.isGameStarted && !gameState.isGameOver && !gameState.isPaused) {
             prompt.classList.remove('hidden');
-        }
+    }
     }
 });
 
@@ -1144,8 +1257,8 @@ function inspectVictims() {
                 delete piece.userData.originalOpacity;
                 delete piece.userData.wasTransparent;
             }
-        });
-        
+});
+
         // Restore victims to normal
         victims.forEach(victim => {
             if (!victim.userData.saved && !victim.userData.died) {
@@ -1266,9 +1379,9 @@ function checkVictimAccessibility() {
             
             // Check if any rubble blocks the path
             const blockers = raycaster.intersectObjects(
-                rubblePieces.filter(p => !p.userData.destroyed)
-            );
-            
+            rubblePieces.filter(p => !p.userData.destroyed)
+        );
+        
             // Victim is accessible if no rubble blocks direct line of sight
             const isBlocked = blockers.length > 0 && blockers[0].distance < distance;
             victim.userData.accessible = !isBlocked && distance < 3;
@@ -1303,7 +1416,7 @@ function attemptRescue() {
     victims.forEach(victim => {
         if (victim.userData.saved || victim.userData.died) return;
         
-        const distance = robotMesh.position.distanceTo(victim.position);
+            const distance = robotMesh.position.distanceTo(victim.position);
         if (distance < 3 && victim.userData.accessible) {
             if (distance < closestDistance) {
                 closestDistance = distance;
@@ -1361,9 +1474,9 @@ function rescueVictim(victim) {
     victim.material.transparent = true;
     victim.material.depthTest = true; // Restore normal depth testing
     
-    const tween = { 
-        scale: 1, 
-        opacity: 1, 
+    const tween = {
+        scale: 1,
+        opacity: 1,
         y: victim.position.y,
         glow: 0
     };
@@ -2088,6 +2201,14 @@ function endGame() {
     
     // Save game result
     if (userManager.currentUser) {
+        // Check if this was the daily challenge
+        const challengeStatus = challengeManager.getChallengeStatus();
+        if (challengeStatus.status === 'active' && 
+            gameState.environment === challengeManager.currentChallenge.env) {
+            // Mark challenge as completed
+            userManager.currentUser.dailyChallengeCompleted = new Date().toDateString();
+        }
+        
         userManager.addGameResult({
             environment: gameState.environment,
             score: finalScore,
@@ -2148,7 +2269,7 @@ function animate() {
     
     // Movement speed
     let moveSpeed = 10.0;
-    const zoneInfo = checkZones();
+        const zoneInfo = checkZones();
     if (zoneInfo.inYellowZone) moveSpeed *= 0.5;
     
     // Friction
@@ -2185,8 +2306,8 @@ function animate() {
                 keys: { W: moveForward, A: moveLeft, S: moveBackward, D: moveRight },
                 position: { x: robotMesh.position.x.toFixed(1), z: robotMesh.position.z.toFixed(1) },
                 velocity: { x: velocity.x.toFixed(1), z: velocity.z.toFixed(1) }
-            });
-        }
+        });
+    }
     } else {
         robotState.acceleration.x = 0;
         robotState.acceleration.z = 0;
@@ -2286,6 +2407,10 @@ function animate() {
 // Homepage
 function updateHomepage() {
     if (userManager.currentUser) {
+        // Initialize arrays if needed for legacy users
+        if (!userManager.currentUser.friends) userManager.currentUser.friends = [];
+        if (!userManager.currentUser.friendRequests) userManager.currentUser.friendRequests = [];
+        
         document.getElementById('streakValue').textContent = userManager.currentUser.streak + ' days';
         document.getElementById('totalPoints').textContent = userManager.currentUser.totalPoints;
         document.getElementById('friendsCount').textContent = userManager.currentUser.friends.length;
@@ -2299,29 +2424,12 @@ function updateHomepage() {
         }
         
         document.querySelector('.signInPrompt').style.display = 'none';
+        document.getElementById('logoutBtn').classList.remove('hidden');
+        document.getElementById('friendsBtn').style.display = 'block';
     } else {
         document.querySelector('.signInPrompt').style.display = 'block';
-    }
-    
-    // Update daily challenge
-    const challengeStatus = challengeManager.getChallengeStatus();
-    const challenge = challengeManager.currentChallenge;
-    
-    document.getElementById('challengeTitle').textContent = challenge.title;
-    document.getElementById('challengeDescription').textContent = challenge.description;
-    document.querySelector('.challengeIcon').textContent = challenge.icon;
-    
-    if (challengeStatus.status === 'active') {
-        document.getElementById('timeRemaining').textContent = 
-            '⚡ LIVE NOW - ' + challengeManager.formatTimeRemaining(challengeStatus.timeRemaining);
-        document.querySelector('.dailyChallenge').style.borderColor = 'rgba(255, 87, 34, 0.8)';
-    } else if (challengeStatus.status === 'upcoming') {
-        document.getElementById('timeRemaining').textContent = 
-            'Starts in ' + challengeManager.formatTimeRemaining(challengeStatus.timeUntil);
-        document.querySelector('.dailyChallenge').style.borderColor = 'rgba(255, 193, 7, 0.5)';
-    } else {
-        document.getElementById('timeRemaining').textContent = 'Challenge Expired';
-        document.querySelector('.dailyChallenge').style.borderColor = 'rgba(158, 158, 158, 0.3)';
+        document.getElementById('logoutBtn').classList.add('hidden');
+        document.getElementById('friendsBtn').style.display = 'none';
     }
 }
 
@@ -2346,6 +2454,22 @@ document.getElementById('playNowBtn').addEventListener('click', () => {
 document.getElementById('viewLeaderboardBtn').addEventListener('click', () => {
     updateLeaderboard('global');
     showScreen('leaderboardScreen');
+});
+
+document.getElementById('friendsBtn')?.addEventListener('click', () => {
+    if (!userManager.currentUser) {
+        alert('Please sign in first!');
+        showScreen('authScreen');
+        return;
+    }
+    showFriendsScreen();
+});
+
+document.getElementById('logoutBtn')?.addEventListener('click', () => {
+    if (confirm('Are you sure you want to logout?')) {
+        userManager.signOut();
+        location.reload();
+    }
 });
 
 document.getElementById('signInLink').addEventListener('click', (e) => {
@@ -2797,6 +2921,41 @@ document.getElementById('backFromNotifications')?.addEventListener('click', () =
     showScreen('homepage');
 });
 
+// Friends Screen Event Handlers
+document.getElementById('addFriendBtn')?.addEventListener('click', () => {
+    const friendUsername = document.getElementById('friendUsernameInput').value.trim();
+    if (!friendUsername) {
+        alert('Please enter a username');
+        return;
+    }
+    
+    const result = userManager.sendFriendRequest(friendUsername);
+    if (result.success) {
+        alert(result.message);
+        document.getElementById('friendUsernameInput').value = '';
+    } else {
+        alert(result.message);
+    }
+});
+
+document.getElementById('friendsListTab')?.addEventListener('click', () => {
+    document.getElementById('friendsListTab').classList.add('active');
+    document.getElementById('friendRequestsTab').classList.remove('active');
+    document.getElementById('friendsListSection').classList.remove('hidden');
+    document.getElementById('friendRequestsSection').classList.add('hidden');
+});
+
+document.getElementById('friendRequestsTab')?.addEventListener('click', () => {
+    document.getElementById('friendRequestsTab').classList.add('active');
+    document.getElementById('friendsListTab').classList.remove('active');
+    document.getElementById('friendRequestsSection').classList.remove('hidden');
+    document.getElementById('friendsListSection').classList.add('hidden');
+});
+
+document.getElementById('backFromFriends')?.addEventListener('click', () => {
+    showScreen('homepage');
+});
+
 function showNotifications() {
     const notifications = notificationManager.notifications;
     const listElement = document.getElementById('notificationsList');
@@ -2839,10 +2998,12 @@ document.getElementById('shareTwitterBtn')?.addEventListener('click', () => {
     window.open(twitterUrl, '_blank');
 });
 
-document.getElementById('shareFacebookBtn')?.addEventListener('click', () => {
-    const url = encodeURIComponent(window.location.href);
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
-    window.open(facebookUrl, '_blank');
+document.getElementById('shareInstagramBtn')?.addEventListener('click', () => {
+    const text = generateShareText();
+    // Instagram doesn't have a direct web share API, so copy text and prompt user
+    navigator.clipboard.writeText(text).then(() => {
+        alert('📸 Results copied! Open Instagram and paste your results into a post or story.');
+    });
 });
 
 document.getElementById('copyResultsBtn')?.addEventListener('click', () => {
@@ -2868,9 +3029,111 @@ function generateShareText() {
 Can you beat my REACT time? #ReActure #DisasterResponse`;
 }
 
+// Friends Screen Management
+function showFriendsScreen() {
+    if (!userManager.currentUser) return;
+    
+    // Initialize arrays if needed
+    if (!userManager.currentUser.friendRequests) userManager.currentUser.friendRequests = [];
+    if (!userManager.currentUser.friends) userManager.currentUser.friends = [];
+    
+    updateFriendsList();
+    updateFriendRequests();
+    showScreen('friendsScreen');
+}
+
+function updateFriendsList() {
+    const listElement = document.getElementById('friendsList');
+    const friends = userManager.currentUser.friends || [];
+    
+    if (friends.length === 0) {
+        listElement.innerHTML = '<div class="emptyState">No friends yet. Add some!</div>';
+        return;
+    }
+    
+    listElement.innerHTML = friends.map(username => {
+        const friend = userManager.getUser(username);
+        if (!friend) return '';
+        
+        return `
+            <div class="friendItem">
+                <div class="friendInfo">
+                    <div class="friendName">${friend.displayName || friend.username}</div>
+                    <div class="friendStats">
+                        ${friend.totalPoints} pts • ${friend.gamesPlayed} games
+                    </div>
+                </div>
+                <div class="friendActions">
+                    <button class="friendActionBtn removeFriendBtn" onclick="removeFriendAction('${username}')">
+                        🗑️ Remove
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateFriendRequests() {
+    const listElement = document.getElementById('friendRequestsList');
+    const requests = userManager.currentUser.friendRequests || [];
+    
+    // Update badge
+    document.getElementById('requestsBadge').textContent = requests.length;
+    document.getElementById('requestsBadge').style.display = requests.length > 0 ? 'inline' : 'none';
+    
+    if (requests.length === 0) {
+        listElement.innerHTML = '<div class="emptyState">No friend requests</div>';
+        return;
+    }
+    
+    listElement.innerHTML = requests.map(username => {
+        const user = userManager.getUser(username);
+        if (!user) return '';
+        
+        return `
+            <div class="friendRequestItem">
+                <div class="friendInfo">
+                    <div class="friendName">${user.displayName || user.username}</div>
+                    <div class="friendStats">
+                        ${user.totalPoints} pts • ${user.gamesPlayed} games
+                    </div>
+                </div>
+                <div class="friendActions">
+                    <button class="friendActionBtn acceptBtn" onclick="acceptFriendAction('${username}')">
+                        ✓ Accept
+                    </button>
+                    <button class="friendActionBtn declineBtn" onclick="declineFriendAction('${username}')">
+                        ✗ Decline
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Global functions for onclick handlers
+window.removeFriendAction = function(username) {
+    if (confirm(`Remove ${username} from friends?`)) {
+        userManager.removeFriend(username);
+        updateFriendsList();
+    }
+};
+
+window.acceptFriendAction = function(username) {
+    userManager.acceptFriendRequest(username);
+    updateFriendsList();
+    updateFriendRequests();
+    alert(`You are now friends with ${username}!`);
+};
+
+window.declineFriendAction = function(username) {
+    userManager.declineFriendRequest(username);
+    updateFriendRequests();
+};
+
 // Screen Navigation Helper
 function showScreen(screenId) {
-    const screens = ['homepage', 'authScreen', 'environmentScreen', 'leaderboardScreen', 'startScreen', 'notificationsScreen'];
+    const screens = ['homepage', 'authScreen', 'environmentScreen', 'leaderboardScreen', 'startScreen', 'notificationsScreen', 'friendsScreen'];
     screens.forEach(id => {
         document.getElementById(id).classList.add('hidden');
     });
@@ -2884,10 +3147,18 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Initialize - Show correct screen on page load
+if (userManager.currentUser) {
+    showScreen('homepage');
+} else {
+    showScreen('authScreen');
+}
+
 // Start Animation Loop
 animate();
 
-console.log('✅ ReActure initialized - BeReal for the Future');
+console.log('✅ ReActure initialized - React for the Future');
 console.log('✅ User System Active');
+console.log('✅ Friends System Active');
 console.log('✅ Daily Challenge System Active');
 console.log('✅ 10Hz Data Collection Ready');
