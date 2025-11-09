@@ -686,7 +686,9 @@ function generateRandomMap(env) {
             
             const geometry = new THREE.BoxGeometry(width, height, depth);
             const material = new THREE.MeshStandardMaterial({ 
-                color: new THREE.Color(envConfig.rubbleColor).offsetHSL(0, 0, Math.random() * 0.1 - 0.05)
+                color: new THREE.Color(envConfig.rubbleColor).offsetHSL(0, 0, Math.random() * 0.1 - 0.05),
+                transparent: false, // Can be made transparent during inspect
+                opacity: 1.0
             });
             const piece = new THREE.Mesh(geometry, material);
             
@@ -761,17 +763,24 @@ function generateRandomMap(env) {
 
 function createVictim(x, z, pileId) {
     const geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
-    const material = new THREE.MeshStandardMaterial({ color: 0xff6b6b });
+    const material = new THREE.MeshStandardMaterial({ 
+        color: 0xff6b6b,
+        transparent: false, // Can be made transparent during inspect
+        opacity: 1.0
+    });
     const victim = new THREE.Mesh(geometry, material);
     victim.position.set(x, 0.4, z);
     victim.castShadow = true;
+    victim.renderOrder = 999; // Render last for better visibility
     
     victim.userData = {
         type: 'victim',
         health: 100,
         maxHealth: 100,
         saved: false,
-        decayRate: 0.3 + Math.random() * 0.4, // 0.3-0.7 health per second
+        died: false,
+        accessible: false,
+        decayRate: 0.3 + Math.random() * 0.4,
         pileId: pileId
     };
     
@@ -1052,74 +1061,106 @@ function togglePause() {
 // ========================================
 
 function inspectVictims() {
-    if (gameState.inspectMode) return; // Already inspecting
+    if (gameState.inspectMode) {
+        console.log('⚠️ Already in inspect mode');
+        return;
+    }
     
+    console.log('👁️ X-RAY VISION ACTIVATED!');
     gameState.inspectMode = true;
     logPlayerAction('inspect_start');
     
-    // X-ray vision - see victims through rubble!
     const cameraDirection = new THREE.Vector3();
     camera.getWorldDirection(cameraDirection);
     
-    // Make rubble transparent during inspect
+    let victimsDetected = 0;
+    
+    // Make ALL rubble transparent (not just in cone)
     rubblePieces.forEach(piece => {
         if (!piece.userData.destroyed) {
+            if (!piece.material.transparent) {
+                piece.userData.originalOpacity = piece.material.opacity || 1.0;
+                piece.userData.wasTransparent = piece.material.transparent || false;
+            }
             piece.material.transparent = true;
-            piece.material.opacity = 0.3; // Semi-transparent
+            piece.material.opacity = 0.2; // Very transparent
+            piece.material.depthWrite = false; // Don't write to depth buffer
             piece.userData.wasInspectTransparent = true;
+            
+            console.log('🧱 Rubble made transparent');
         }
     });
     
-    // Highlight victims in cone of vision
+    // Make ALL victims visible with bright glow (within range and in front)
     victims.forEach(victim => {
         if (victim.userData.saved || victim.userData.died) return;
         
         const toVictim = new THREE.Vector3().subVectors(victim.position, camera.position);
         const distance = toVictim.length();
         
-        if (distance < 25) { // Within 25m
+        if (distance < 30) { // Extended range
             toVictim.normalize();
             const angle = cameraDirection.angleTo(toVictim);
             
-            // Within 90-degree cone in front of camera (wider for easier detection)
-            if (angle < Math.PI / 2) {
-                // X-ray effect - bright glowing victim visible through everything
+            // Wide cone in front (nearly 180°)
+            if (angle < Math.PI * 0.6) {
+                // Make victim bright and visible through everything
+                if (!victim.material.transparent) {
+                    victim.userData.wasTransparent = victim.material.transparent || false;
+                }
+                
                 victim.material.emissive = new THREE.Color(0xff0000);
-                victim.material.emissiveIntensity = 1.5;
+                victim.material.emissiveIntensity = 2.0; // Very bright
                 victim.material.transparent = true;
                 victim.material.opacity = 1.0;
-                victim.material.depthTest = false; // Render through everything!
+                victim.material.depthTest = false; // Render on top of everything!
+                victim.material.depthWrite = false;
                 victim.userData.inspectPulse = 0;
                 
-                console.log('👁️ Victim detected through rubble at', distance.toFixed(1) + 'm');
+                victimsDetected++;
+                console.log('🔴 Victim visible through rubble at', distance.toFixed(1) + 'm, angle:', (angle * 180 / Math.PI).toFixed(1) + '°');
             }
         }
     });
     
+    console.log('👁️ X-ray detected', victimsDetected, 'victim(s)');
+    if (victimsDetected === 0) {
+        console.log('⚠️ No victims in view. Look around or get closer!');
+    }
+    
     // Clear inspect mode after 3 seconds
     if (gameState.inspectTimeout) clearTimeout(gameState.inspectTimeout);
     gameState.inspectTimeout = setTimeout(() => {
+        console.log('👁️ X-ray vision ending...');
         gameState.inspectMode = false;
         
-        // Restore rubble opacity
+        // Restore rubble to solid
         rubblePieces.forEach(piece => {
             if (piece.userData.wasInspectTransparent) {
-                piece.material.opacity = 1.0;
-                piece.material.transparent = false;
+                piece.material.opacity = piece.userData.originalOpacity || 1.0;
+                piece.material.transparent = piece.userData.wasTransparent || false;
+                piece.material.depthWrite = true;
                 delete piece.userData.wasInspectTransparent;
+                delete piece.userData.originalOpacity;
+                delete piece.userData.wasTransparent;
             }
         });
         
-        // Remove victim highlights
+        // Restore victims to normal
         victims.forEach(victim => {
-            victim.material.emissive = new THREE.Color(0x000000);
-            victim.material.emissiveIntensity = 0;
-            victim.material.depthTest = true; // Restore normal rendering
-            victim.material.transparent = false;
-            victim.material.opacity = 1.0;
-            delete victim.userData.inspectPulse;
+            if (!victim.userData.saved && !victim.userData.died) {
+                victim.material.emissive = new THREE.Color(0x000000);
+                victim.material.emissiveIntensity = 0;
+                victim.material.depthTest = true;
+                victim.material.depthWrite = true;
+                victim.material.transparent = victim.userData.wasTransparent || false;
+                victim.material.opacity = 1.0;
+                delete victim.userData.inspectPulse;
+                delete victim.userData.wasTransparent;
+            }
         });
         
+        console.log('✅ X-ray vision ended - normal vision restored');
         logPlayerAction('inspect_end');
     }, 3000);
 }
@@ -1205,31 +1246,48 @@ function refuel() {
 // ========================================
 
 function checkVictimAccessibility() {
-    // Just check which victims are accessible (for UI feedback)
+    // Check which victims are directly visible (line of sight)
+    const raycaster = new THREE.Raycaster();
+    
     victims.forEach(victim => {
         if (victim.userData.saved || victim.userData.died) return;
         
-        // Check if rubble above victim is cleared
-        const rubbleAbove = rubblePieces.filter(p => 
-            !p.userData.destroyed && 
-            p.userData.pileId === victim.userData.pileId
-        );
-        
-        const totalRubble = rubblePieces.filter(p => p.userData.pileId === victim.userData.pileId).length;
-        const clearedPercent = totalRubble > 0 ? 1 - (rubbleAbove.length / totalRubble) : 1;
-        
         const distance = robotMesh.position.distanceTo(victim.position);
         
-        // Mark as accessible if cleared enough and close
-        victim.userData.accessible = clearedPercent > 0.7 && distance < 3;
-        
-        // Visual feedback - pulse if accessible
-        if (victim.userData.accessible) {
-            victim.material.emissive = new THREE.Color(0x00ff00);
-            victim.material.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.005) * 0.2;
-        } else if (!victim.userData.died) {
-            victim.material.emissive = new THREE.Color(0x000000);
-            victim.material.emissiveIntensity = 0;
+        // Check if victim is in range
+        if (distance < 5) {
+            // Raycast from robot to victim to check for blocking rubble
+            const direction = new THREE.Vector3()
+                .subVectors(victim.position, robotMesh.position)
+                .normalize();
+            
+            raycaster.set(robotMesh.position, direction);
+            raycaster.far = distance + 0.5;
+            
+            // Check if any rubble blocks the path
+            const blockers = raycaster.intersectObjects(
+                rubblePieces.filter(p => !p.userData.destroyed)
+            );
+            
+            // Victim is accessible if no rubble blocks direct line of sight
+            const isBlocked = blockers.length > 0 && blockers[0].distance < distance;
+            victim.userData.accessible = !isBlocked && distance < 3;
+            
+            // Visual feedback - pulse GREEN if accessible
+            if (victim.userData.accessible) {
+                victim.material.emissive = new THREE.Color(0x00ff00);
+                victim.material.emissiveIntensity = 0.5 + Math.sin(Date.now() * 0.005) * 0.3;
+                console.log('✅ Victim accessible at', distance.toFixed(1) + 'm');
+            } else if (!victim.userData.died && !gameState.inspectMode) {
+                victim.material.emissive = new THREE.Color(0x000000);
+                victim.material.emissiveIntensity = 0;
+            }
+        } else {
+            victim.userData.accessible = false;
+            if (!victim.userData.died && !gameState.inspectMode) {
+                victim.material.emissive = new THREE.Color(0x000000);
+                victim.material.emissiveIntensity = 0;
+            }
         }
     });
 }
