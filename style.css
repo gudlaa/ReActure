@@ -26,8 +26,12 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    cursor: none;
+    cursor: crosshair;
     z-index: 1;
+}
+
+#gameCanvas:focus {
+    outline: none;
 }
 
 #gameCanvas.hidden {
@@ -1064,6 +1068,39 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+}
+
+/* Pointer Lock Prompt */
+.pointerPrompt {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 30px 50px;
+    border-radius: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.pointerPrompt.hidden {
+    display: none;
+}
+
+.pointerPrompt p {
+    color: white;
+    font-size: 24px;
+    margin: 10px 0;
+    font-family: 'Orbitron', sans-serif;
+}
+
+.promptSmall {
+    font-size: 16px !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    font-family: 'Roboto', sans-serif !important;
 }
 
 /* Game Over Screen */

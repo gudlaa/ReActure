@@ -861,6 +861,8 @@ canvas.style.outline = 'none';
 canvas.style.cursor = 'crosshair';
 
 const handleKeyDown = (event) => {
+    console.log('🎮 Key pressed:', event.code, 'Game started:', gameState.isGameStarted, 'Paused:', gameState.isPaused);
+    
     // ESC works even when paused
     if (event.code === 'Escape') {
         event.preventDefault();
@@ -870,27 +872,35 @@ const handleKeyDown = (event) => {
         return;
     }
     
-    if (!gameState.isGameStarted || gameState.isGameOver || gameState.isPaused) return;
+    if (!gameState.isGameStarted || gameState.isGameOver || gameState.isPaused) {
+        console.log('⚠️ Input blocked - Game state:', { started: gameState.isGameStarted, over: gameState.isGameOver, paused: gameState.isPaused });
+        return;
+    }
     
     switch (event.code) {
         case 'KeyW':
-                moveForward = true;
-                    logPlayerAction('move_forward_start');
+            moveForward = true;
+            console.log('✅ W pressed - Move forward =', moveForward);
+            logPlayerAction('move_forward_start');
             break;
         case 'KeyA':
-                moveLeft = true;
-                    logPlayerAction('move_left_start');
+            moveLeft = true;
+            console.log('✅ A pressed - Move left =', moveLeft);
+            logPlayerAction('move_left_start');
             break;
         case 'KeyS':
-                moveBackward = true;
-                    logPlayerAction('move_backward_start');
+            moveBackward = true;
+            console.log('✅ S pressed - Move backward =', moveBackward);
+            logPlayerAction('move_backward_start');
             break;
         case 'KeyD':
-                moveRight = true;
-                    logPlayerAction('move_right_start');
+            moveRight = true;
+            console.log('✅ D pressed - Move right =', moveRight);
+            logPlayerAction('move_right_start');
             break;
         case 'Space':
             event.preventDefault();
+            console.log('✅ Space pressed');
             // Jump if moving, destroy rubble if stationary
             if ((moveForward || moveBackward || moveLeft || moveRight) && !robotState.isJumping) {
                 jump();
@@ -899,9 +909,11 @@ const handleKeyDown = (event) => {
             }
             break;
         case 'KeyR':
-                refuel();
+            console.log('✅ R pressed - Refuel attempt');
+            refuel();
             break;
         case 'KeyE':
+            console.log('✅ E pressed - Inspect mode');
             // Inspect - briefly reveal nearby victims
             inspectVictims();
             break;
@@ -954,11 +966,52 @@ canvas.addEventListener('mouseup', () => {
     mouseDown = false;
 });
 
+// Pointer lock for FPS controls
+canvas.addEventListener('click', () => {
+    if (gameState.isGameStarted && !gameState.isGameOver && !gameState.isPaused) {
+        canvas.requestPointerLock = canvas.requestPointerLock || 
+                                    canvas.mozRequestPointerLock || 
+                                    canvas.webkitRequestPointerLock;
+        canvas.requestPointerLock();
+    }
+});
+
+document.addEventListener('pointerlockchange', () => {
+    const isLocked = document.pointerLockElement === canvas;
+    const prompt = document.getElementById('pointerLockPrompt');
+    
+    if (isLocked) {
+        console.log('✅ Pointer locked - Mouse look enabled');
+        if (prompt) prompt.classList.add('hidden');
+    } else {
+        console.log('❌ Pointer unlocked - Click to enable mouse look');
+        if (prompt && gameState.isGameStarted && !gameState.isGameOver && !gameState.isPaused) {
+            prompt.classList.remove('hidden');
+        }
+    }
+});
+
+// Also handle for different browsers
+document.addEventListener('mozpointerlockchange', () => {
+    const isLocked = document.mozPointerLockElement === canvas;
+    const prompt = document.getElementById('pointerLockPrompt');
+    if (isLocked && prompt) prompt.classList.add('hidden');
+    else if (prompt && gameState.isGameStarted) prompt.classList.remove('hidden');
+});
+
+document.addEventListener('webkitpointerlockchange', () => {
+    const isLocked = document.webkitPointerLockElement === canvas;
+    const prompt = document.getElementById('pointerLockPrompt');
+    if (isLocked && prompt) prompt.classList.add('hidden');
+    else if (prompt && gameState.isGameStarted) prompt.classList.remove('hidden');
+});
+
 canvas.addEventListener('mousemove', (event) => {
     if (!gameState.isGameStarted || gameState.isGameOver || gameState.isPaused) return;
     
-    const deltaX = event.movementX !== undefined ? event.movementX : (event.clientX - lastMouseX);
-    const deltaY = event.movementY !== undefined ? event.movementY : (event.clientY - lastMouseY);
+    // Use movementX/Y for smooth FPS controls (works with pointer lock)
+    const deltaX = event.movementX || 0;
+    const deltaY = event.movementY || 0;
     
     // First-person camera rotation
     cameraYaw -= deltaX * mouseSensitivity;
@@ -966,9 +1019,6 @@ canvas.addEventListener('mousemove', (event) => {
     
     // Limit vertical look (prevent flipping)
     cameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraPitch));
-    
-    lastMouseX = event.clientX;
-    lastMouseY = event.clientY;
 });
 
 // ========================================
@@ -1625,16 +1675,21 @@ function updateScore() {
 function initGame(environment) {
     if (gameState.isGameStarted) return;
     
+    console.log('🎮 Starting game with environment:', environment);
+    
     gameState.isGameStarted = true;
     gameState.environment = environment;
     gameState.score = 0;
     gameState.victimsSaved = 0;
+    gameState.victimsDied = 0;
+    gameState.isPaused = false;
     
     // Update environment visuals
     const envConfig = ENVIRONMENTS[environment];
     scene.background.setHex(envConfig.skyColor);
     scene.fog.color.setHex(envConfig.fogColor);
     
+    console.log('🌍 Creating environment:', envConfig.name);
     createGround(environment);
     createSky(environment);
     
@@ -1647,13 +1702,25 @@ function initGame(environment) {
     gameState.startTime = Date.now();
     gameState.logs = [];
     
-    // Reset robot
+    // Reset robot position and state
     robotMesh.position.set(0, robotHeight, 0);
     robotState.health = 100;
     robotState.fuel = 100;
+    robotState.isJumping = false;
+    velocity.set(0, 0, 0);
+    
+    // Initialize first-person camera BEFORE generating map
+    camera.position.set(0, robotHeight + 1.5, 0); // Eye level at start position
+    camera.rotation.set(0, 0, 0);
+    cameraYaw = 0;
+    cameraPitch = 0;
+    
+    console.log('📹 Camera initialized at:', camera.position);
     
     // Generate random map
+    console.log('🗺️ Generating random map...');
     generateRandomMap(environment);
+    console.log('✅ Map generated - Victims:', gameState.victimsTotal);
     
     // Start systems
     startVictimHealthDecay();
@@ -1661,15 +1728,27 @@ function initGame(environment) {
     
     logRobotState('game_start');
     
+    // Focus and setup controls
     setTimeout(() => {
         canvas.focus();
-        // First-person: camera at robot's eye level
-        camera.position.copy(robotMesh.position);
-        camera.position.y += 1.5; // Robot's eye height
-        camera.rotation.set(0, 0, 0);
-        cameraYaw = 0;
-        cameraPitch = 0;
-    }, 500);
+        
+        console.log('🎮 GAME READY!');
+        console.log('📹 Camera position:', camera.position);
+        console.log('🤖 Robot position:', robotMesh.position);
+        console.log('🧱 Rubble pieces:', rubblePieces.length);
+        console.log('👥 Victims:', victims.length);
+        console.log('');
+        console.log('HOW TO PLAY:');
+        console.log('1. Click canvas to enable mouse look');
+        console.log('2. Use WASD to move');
+        console.log('3. Press E to inspect (infrared)');
+        console.log('4. Press ESC to pause');
+        console.log('5. Press Space to destroy rubble');
+        
+        // Show pointer lock prompt
+        const prompt = document.getElementById('pointerLockPrompt');
+        if (prompt) prompt.classList.remove('hidden');
+    }, 100);
 }
 
 // ========================================
@@ -1786,6 +1865,7 @@ const robotMovement = {
 function animate() {
     requestAnimationFrame(animate);
     
+    // Always render (shows scene even on menu screens)
     if (!gameState.isGameStarted) {
         renderer.render(scene, camera);
         return;
@@ -1806,13 +1886,9 @@ function animate() {
     if (delta > 0.1) delta = 0.1;
     if (delta <= 0) delta = 0.016;
     
-    // Update camera rotation
-    cameraRotationY = targetCameraRotationY;
-    cameraRotationX = targetCameraRotationX;
-    
-    // Movement
+    // Movement speed
     let moveSpeed = 10.0;
-        const zoneInfo = checkZones();
+    const zoneInfo = checkZones();
     if (zoneInfo.inYellowZone) moveSpeed *= 0.5;
     
     // Friction
@@ -1842,6 +1918,15 @@ function animate() {
         // Calculate acceleration (for sensor data)
         robotState.acceleration.x = (velocity.x - prevVelocityX) / delta;
         robotState.acceleration.z = (velocity.z - prevVelocityZ) / delta;
+        
+        // Debug movement occasionally
+        if (Math.random() < 0.02) {
+            console.log('🏃 Moving:', {
+                keys: { W: moveForward, A: moveLeft, S: moveBackward, D: moveRight },
+                position: { x: robotMesh.position.x.toFixed(1), z: robotMesh.position.z.toFixed(1) },
+                velocity: { x: velocity.x.toFixed(1), z: velocity.z.toFixed(1) }
+            });
+        }
     } else {
         robotState.acceleration.x = 0;
         robotState.acceleration.z = 0;
