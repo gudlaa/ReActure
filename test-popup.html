@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test REACT TIME</title>
+</head>
+<body>
+    <h1>REACT TIME Test</h1>
+    <p>Run this in your browser console on the main app:</p>
+    <pre style="background: #000; color: #0f0; padding: 20px; border-radius: 8px;">
+// STEP 1: Reset everything
+localStorage.removeItem('reacture_dailyChallenge');
+if (typeof userManager !== 'undefined' && userManager.currentUser) {
+    delete userManager.currentUser.dailyChallengeCompleted;
+    userManager.saveUser();
+}
+
+// STEP 2: Force new challenge
+if (typeof challengeManager !== 'undefined') {
+    challengeManager.hasShownPopup = false;
+}
+
+// STEP 3: Reload
+console.log('✅ Reset complete - reloading...');
+location.reload();
+    </pre>
+
+    <h2>After reload, you should see:</h2>
+    <ul>
+        <li>⚡ HUGE POPUP appears</li>
+        <li>"REACT TIME: [Challenge Name]"</li>
+        <li>Live countdown timer</li>
+        <li>Orange/red styling</li>
+        <li>"⚡ React Now!" button</li>
+    </ul>
+
+    <h2>If it STILL doesn't work:</h2>
+    <p>Open console and run:</p>
+    <pre style="background: #000; color: #0f0; padding: 20px; border-radius: 8px;">
+// Force show popup manually
+const popup = document.getElementById('reactTimePopup');
+if (popup) {
+    popup.classList.remove('hidden');
+    popup.style.display = 'flex';
+    popup.style.zIndex = '99999';
+    console.log('✅ Popup forced visible!');
+} else {
+    console.error('❌ Popup element not found - hard refresh needed!');
+}
+    </pre>
+</body>
+</html>

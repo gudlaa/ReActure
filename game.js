@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 
+// Note: mongoService is loaded as a global from mongoService.js script tag
+// We'll reference it as window.mongoService or just mongoService
+
 // ========================================
 // USER AUTHENTICATION & DATA MANAGEMENT
 // ========================================
@@ -17,20 +20,34 @@ class UserManager {
         }
     }
     
+    async hashPassword(password) {
+        // Use Web Crypto API for secure password hashing
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
+    }
+    
     getUser(username) {
         const users = JSON.parse(localStorage.getItem('reacture_users') || '{}');
         return users[username] || null;
     }
     
-    createUser(username, displayName) {
+    async createUser(username, displayName, password) {
         const users = JSON.parse(localStorage.getItem('reacture_users') || '{}');
         if (users[username]) {
             return { success: false, message: 'Username already exists' };
         }
         
+        // Hash the password
+        const passwordHash = await this.hashPassword(password);
+        
         users[username] = {
             username,
             displayName,
+            passwordHash,
             createdAt: Date.now(),
             totalPoints: 0,
             gamesPlayed: 0,
@@ -40,17 +57,24 @@ class UserManager {
             friendRequests: [],
             sentRequests: [],
             history: [],
-            dailyChallengeCompleted: null
+            dailyChallengeCompleted: null,
+            hasSeenReactTimePopup: false  // Track if user has ever seen the popup
         };
         
         localStorage.setItem('reacture_users', JSON.stringify(users));
         return { success: true, user: users[username] };
     }
     
-    signIn(username) {
+    async signIn(username, password) {
         const user = this.getUser(username);
         if (!user) {
             return { success: false, message: 'User not found' };
+        }
+        
+        // Verify password
+        const passwordHash = await this.hashPassword(password);
+        if (user.passwordHash !== passwordHash) {
+            return { success: false, message: 'Incorrect password' };
         }
         
         this.currentUser = user;
@@ -171,6 +195,10 @@ class UserManager {
         users[friendUsername] = friend;
         localStorage.setItem('reacture_users', JSON.stringify(users));
         
+        // Send notification to the friend (they'll see it when they login)
+        // For now, we're using localStorage - in production this would be a push notification
+        console.log(`📨 Friend request sent from ${this.currentUser.username} to ${friendUsername}`);
+        
         return { success: true, message: 'Friend request sent!' };
     }
     
@@ -268,7 +296,11 @@ class ChallengeManager {
         ];
         
         this.currentChallenge = this.getDailyChallenge();
+        // Always reset popup flag on page load so it shows every time for testing
         this.hasShownPopup = false;
+        
+        // Store whether popup was shown this session (not persistent)
+        this.popupShownThisSession = false;
     }
     
     getDailyChallenge() {
@@ -278,11 +310,23 @@ class ChallengeManager {
         if (stored) {
             const challenge = JSON.parse(stored);
             if (challenge.date === today) {
-                return challenge;
+                // Check if challenge has expired
+                const now = Date.now();
+                if (now < challenge.expiresAt) {
+                    console.log('📅 Using existing challenge for today');
+                    return challenge;
+                } else {
+                    console.log('⏰ Challenge expired, generating new one');
+                    // Challenge expired, generate a new one
+                }
+            } else {
+                console.log('🗓️  New day, generating new challenge');
             }
+        } else {
+            console.log('🆕 No challenge found, creating first one');
         }
         
-        // Generate new daily challenge
+        // Generate new daily challenge (starts immediately!)
         const randomTime = this.getRandomDailyTime();
         const randomChallenge = this.dailyChallenges[Math.floor(Math.random() * this.dailyChallenges.length)];
         
@@ -294,28 +338,58 @@ class ChallengeManager {
         };
         
         localStorage.setItem('reacture_dailyChallenge', JSON.stringify(challenge));
+        
+        // Reset popup flag so it shows for new challenge
+        this.hasShownPopup = false;
+        
+        console.log('✨ New challenge created:', challenge.title);
+        console.log('⏰ Active window:', new Date(challenge.time).toLocaleTimeString(), '-', new Date(challenge.expiresAt).toLocaleTimeString());
+        
         return challenge;
     }
     
     getRandomDailyTime() {
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const randomHour = 9 + Math.floor(Math.random() * 12); // Between 9 AM and 9 PM
-        const randomMinute = Math.floor(Math.random() * 60);
-        return todayStart.getTime() + (randomHour * 60 * 60 * 1000) + (randomMinute * 60 * 1000);
+        // Set REACT TIME to start NOW (so it appears when app opens)
+        // In production, you could randomize this or set to a specific time
+        const now = Date.now();
+        // Start the challenge now or in the past so it's immediately active
+        return now - (1 * 60 * 1000); // Started 1 minute ago (so it's active now)
     }
     
     getChallengeStatus() {
         const now = Date.now();
         const { time, expiresAt } = this.currentChallenge;
         
+        // Check if user already completed today's challenge
+        const today = new Date().toDateString();
+        const hasCompleted = userManager.currentUser && 
+                            userManager.currentUser.dailyChallengeCompleted === today;
+        
         if (now < time) {
-            return { status: 'upcoming', timeUntil: time - now };
+            return { status: 'upcoming', timeUntil: time - now, completed: hasCompleted };
         } else if (now >= time && now < expiresAt) {
-            return { status: 'active', timeRemaining: expiresAt - now };
+            return { status: 'active', timeRemaining: expiresAt - now, completed: hasCompleted };
         } else {
-            return { status: 'expired', timeUntil: null };
+            return { status: 'expired', timeUntil: null, completed: hasCompleted };
         }
+    }
+    
+    canPlayChallenge() {
+        const status = this.getChallengeStatus();
+        // Can only play if challenge is active and not yet completed
+        return status.status === 'active' && !status.completed;
+    }
+    
+    getMissedMessage() {
+        const status = this.getChallengeStatus();
+        if (status.completed) {
+            return "✅ You completed today's REACT TIME!";
+        } else if (status.status === 'expired') {
+            return "❌ You missed today's REACT TIME window";
+        } else if (status.status === 'upcoming') {
+            return "⏰ Today's REACT TIME hasn't started yet";
+        }
+        return "";
     }
     
     formatTimeRemaining(ms) {
@@ -331,31 +405,82 @@ class ChallengeManager {
     }
     
     showReactTimePopup() {
-        if (this.hasShownPopup) return;
+        console.log('🔍 Checking REACT TIME popup...');
+        console.log('  popupShownThisSession:', this.popupShownThisSession);
+        
+        // Only show once per page load session
+        if (this.popupShownThisSession) {
+            console.log('  ⏭️  Already shown this session');
+            return;
+        }
         
         const status = this.getChallengeStatus();
-        if (status.status === 'active') {
-            this.hasShownPopup = true;
+        console.log('  Challenge status:', status);
+        console.log('  - Status:', status.status);
+        console.log('  - Completed:', status.completed);
+        console.log('  - Time remaining:', status.timeRemaining);
+        
+        if (status.status === 'active' && !status.completed) {
+            console.log('  ⚡ SHOWING REACT TIME POPUP!');
+            this.popupShownThisSession = true; // Mark as shown for this session
+            
             const popup = document.getElementById('reactTimePopup');
             const challengeTitle = document.getElementById('popupChallengeTitle');
             const challengeDesc = document.getElementById('popupChallengeDescription');
+            const countdown = document.getElementById('popupCountdown');
+            
+            console.log('  Popup element:', popup ? '✅ Found' : '❌ NOT FOUND');
             
             if (popup) {
                 challengeTitle.textContent = this.currentChallenge.title;
                 challengeDesc.textContent = this.currentChallenge.description;
                 popup.classList.remove('hidden');
+                popup.style.display = 'flex'; // Force display
+                popup.style.zIndex = '9999'; // Force on top
+                console.log('  ✅ Popup displayed!');
+                console.log('  📍 Popup classList:', Array.from(popup.classList));
+                console.log('  📍 Popup display:', window.getComputedStyle(popup).display);
                 
-                // Auto-hide after 10 seconds
-                setTimeout(() => {
-                    popup.classList.add('hidden');
-                }, 10000);
+                // Update countdown every second
+                const updateCountdown = () => {
+                    const currentStatus = this.getChallengeStatus();
+                    if (currentStatus.status === 'active' && countdown) {
+                        countdown.textContent = this.formatTimeRemaining(currentStatus.timeRemaining);
+                    } else if (countdown) {
+                        countdown.textContent = 'EXPIRED';
+                    }
+                };
+                
+                // Initial update
+                updateCountdown();
+                
+                // Update every second while popup is visible
+                this.countdownInterval = setInterval(updateCountdown, 1000);
+            } else {
+                console.error('  ❌ ERROR: Popup element not found in DOM!');
             }
             
             // Send notification
             notificationManager.addNotification('react_time', 
-                `⚡ ${this.currentChallenge.title} is LIVE NOW!`,
+                `⚡ ${this.currentChallenge.title} is LIVE NOW! React within ${Math.floor(status.timeRemaining / 60000)} minutes!`,
                 { challenge: this.currentChallenge }
             );
+            
+            // Play sound notification (if available)
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURE');
+                audio.play().catch(() => {});
+            } catch (e) {}
+        } else {
+            console.log('  ⏭️  Not showing popup:');
+            console.log('     - Status is:', status.status);
+            console.log('     - Completed is:', status.completed);
+            if (status.completed) {
+                console.log('     - User already completed today\'s challenge');
+            }
+            if (status.status !== 'active') {
+                console.log('     - Challenge is not active (status:', status.status + ')');
+            }
         }
     }
 }
@@ -417,6 +542,7 @@ class NotificationManager {
     
     saveNotifications() {
         localStorage.setItem('reacture_notifications', JSON.stringify(this.notifications));
+        console.log('💾 Notifications saved to localStorage');
     }
     
     addNotification(type, message, data = {}) {
@@ -448,9 +574,12 @@ class NotificationManager {
     }
     
     markAllAsRead() {
-        this.notifications.forEach(n => n.read = true);
+        // Clear all notifications instead of just marking as read
+        this.notifications = [];
         this.saveNotifications();
         this.updateBadge();
+        console.log('🗑️  All notifications cleared');
+        console.log('📊 Notifications count now:', this.notifications.length);
     }
     
     getUnreadCount() {
@@ -458,12 +587,16 @@ class NotificationManager {
     }
     
     updateBadge() {
-        const badge = document.getElementById('notificationBadge');
+        // Update both badges (nav and any others)
+        const badgeNav = document.getElementById('notificationBadgeNav');
         const count = this.getUnreadCount();
-        if (badge) {
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'block' : 'none';
+        
+        if (badgeNav) {
+            badgeNav.textContent = count;
+            badgeNav.style.display = count > 0 ? 'inline' : 'none';
         }
+        
+        console.log(`🔔 Notification badge updated: ${count} unread`);
     }
 }
 
@@ -766,6 +899,8 @@ let fuelStation = null;
 // ========================================
 
 function generateRandomMap(env) {
+    console.log('🗺️  Generating map for environment:', env);
+    
     // Clear existing objects
     rubblePieces.forEach(piece => scene.remove(piece));
     victims.forEach(victim => scene.remove(victim));
@@ -777,6 +912,14 @@ function generateRandomMap(env) {
     zones.length = 0;
     
     const envConfig = ENVIRONMENTS[env];
+    
+    if (!envConfig) {
+        console.error('❌ ERROR: No environment config for:', env);
+        alert(`Critical Error: Environment "${env}" not found!`);
+        return;
+    }
+    
+    console.log('✅ Using environment config:', envConfig.name);
     
     // Create rubble piles with victims - Earthquake style (horizontal spread)
     const numPiles = 7 + Math.floor(Math.random() * 5); // 7-11 piles
@@ -1179,6 +1322,9 @@ function inspectVictims() {
         return;
     }
     
+    // Log inspect action
+    logRobotState('inspect', { action: 'inspect_activated' });
+    
     console.log('👁️ X-RAY VISION ACTIVATED!');
     gameState.inspectMode = true;
     logPlayerAction('inspect_start');
@@ -1309,6 +1455,13 @@ function destroyRubble() {
         const piece = intersects[0].object;
         piece.userData.destroyed = true;
         
+        // Log rubble destruction
+        logRobotState('destroy_rubble', { 
+            action: 'rubble_destroyed',
+            success: true,
+            position: { x: piece.position.x, y: piece.position.y, z: piece.position.z }
+        });
+        
         // Add score for destroying rubble
         gameState.score += 5;
         updateScore();
@@ -1409,6 +1562,9 @@ function checkVictimAccessibility() {
 function attemptRescue() {
     console.log('🆘 Click! Attempting rescue...');
     
+    // Log rescue attempt
+    logRobotState('rescue', { action: 'rescue_attempt' });
+    
     // Find closest accessible victim
     let closestVictim = null;
     let closestDistance = Infinity;
@@ -1456,6 +1612,14 @@ function rescueVictim(victim) {
     if (victim.userData.saved) return;
     
     console.log('🎉 RESCUING VICTIM! Health:', victim.userData.health);
+    
+    // Log successful rescue
+    logRobotState('rescue', { 
+        action: 'victim_rescued',
+        success: true,
+        victimHealth: victim.userData.health,
+        position: { x: victim.position.x, y: victim.position.y, z: victim.position.z }
+    });
     
     victim.userData.saved = true;
     gameState.victimsSaved++;
@@ -2045,7 +2209,7 @@ function updateScore() {
 // GAME INITIALIZATION
 // ========================================
 
-function initGame(environment) {
+async function initGame(environment) {
     if (gameState.isGameStarted) return;
     
     console.log('🎮 Starting game with environment:', environment);
@@ -2074,6 +2238,45 @@ function initGame(environment) {
     
     gameState.startTime = Date.now();
     gameState.logs = [];
+    
+    // ✨ Initialize MongoDB session
+    console.log('🔍 Checking MongoDB availability...');
+    console.log('  - window.mongoService exists:', typeof window.mongoService !== 'undefined');
+    console.log('  - mongoService exists:', typeof mongoService !== 'undefined');
+    console.log('  - mongoService.enabled:', window.mongoService?.enabled);
+    console.log('  - userManager.currentUser:', !!userManager.currentUser);
+    
+    if (typeof window.mongoService !== 'undefined' && window.mongoService.enabled && userManager.currentUser) {
+        const sessionId = 'reacture_' + gameState.startTime;
+        console.log('📊 Creating MongoDB session:', sessionId);
+        console.log('   Player:', userManager.currentUser.username);
+        console.log('   Environment:', environment);
+        console.log('   Victims:', victims.length);
+        
+        try {
+            const result = await window.mongoService.createSession({
+                playerId: userManager.currentUser.username,
+                playerName: userManager.currentUser.displayName,
+                sessionId: sessionId,
+                environment: environment,
+                victimsTotal: victims.length
+            });
+            console.log('✅ MongoDB session created successfully:', result);
+        } catch (error) {
+            console.error('❌ MongoDB session creation failed:', error);
+        }
+    } else {
+        console.warn('⚠️  MongoDB not available or not enabled');
+        if (typeof window.mongoService === 'undefined') {
+            console.error('   ERROR: mongoService not loaded! Check if mongoService.js is included.');
+        }
+        if (!window.mongoService?.enabled) {
+            console.warn('   MongoDB is disabled');
+        }
+        if (!userManager.currentUser) {
+            console.warn('   No user logged in');
+        }
+    }
     
     // Reset robot position and state
     robotMesh.position.set(0, robotHeight, 0);
@@ -2137,7 +2340,7 @@ function checkGameOver() {
     }
 }
 
-function endGame() {
+async function endGame() {
     if (gameState.isGameOver) return;
     gameState.isGameOver = true;
     
@@ -2203,8 +2406,10 @@ function endGame() {
     if (userManager.currentUser) {
         // Check if this was the daily challenge
         const challengeStatus = challengeManager.getChallengeStatus();
-        if (challengeStatus.status === 'active' && 
-            gameState.environment === challengeManager.currentChallenge.env) {
+        const isChallenge = challengeStatus.status === 'active' && 
+                            gameState.environment === challengeManager.currentChallenge.env;
+        
+        if (isChallenge) {
             // Mark challenge as completed
             userManager.currentUser.dailyChallengeCompleted = new Date().toDateString();
         }
@@ -2220,6 +2425,101 @@ function endGame() {
         });
         
         userManager.updateStreak();
+        
+        // ✨ Finalize MongoDB session
+        console.log('🔍 Finalizing MongoDB session...');
+        console.log('  - mongoService available:', typeof window.mongoService !== 'undefined');
+        console.log('  - mongoService.enabled:', window.mongoService?.enabled);
+        console.log('  - currentSessionId:', window.mongoService?.currentSessionId);
+        console.log('  - Sensor data collected:', gameState.logs.length, 'samples');
+        console.log('  - Visual frames collected:', visualFrames.length, 'frames');
+        
+        if (typeof window.mongoService !== 'undefined' && window.mongoService.enabled) {
+            console.log('📊 Finalizing MongoDB session with complete data:');
+            
+            // Convert sensor data to MongoDB format (10Hz data)
+            const sensorData = gameState.logs.map(log => ({
+                timestamp: log.timestamp_ms,
+                accelerometer: {
+                    x: log.accelerometer?.x || 0,
+                    y: log.accelerometer?.y || 0,
+                    z: log.accelerometer?.z || 0
+                },
+                battery: log.battery || 100,
+                damage: log.damage || 0,
+                proximity: log.sensors?.proximity || 0,
+                keyPresses: log.key_presses || {}
+            }));
+            
+            // Extract movement path from logs (sample at 1Hz for efficiency)
+            const movementPath = gameState.logs
+                .filter((log, index) => index % 10 === 0) // Sample every 10th entry (1Hz instead of 10Hz)
+                .map(log => ({
+                    position: {
+                        x: log.robot?.position?.x || 0,
+                        y: log.robot?.position?.y || 0,
+                        z: log.robot?.position?.z || 0
+                    },
+                    rotation: {
+                        yaw: log.camera?.yaw || 0,
+                        pitch: log.camera?.pitch || 0
+                    },
+                    timestamp: log.timestamp_ms
+                }));
+            
+            // Extract player decisions (inspect, rescue, destroy actions)
+            const decisions = gameState.logs
+                .filter(log => ['inspect', 'rescue', 'destroy_rubble', 'refuel'].includes(log.event))
+                .map(log => ({
+                    type: log.event,
+                    position: {
+                        x: log.robot?.position?.x || 0,
+                        y: log.robot?.position?.y || 0,
+                        z: log.robot?.position?.z || 0
+                    },
+                    timestamp: log.timestamp_ms,
+                    success: log.data?.success !== false, // Assume success unless explicitly false
+                    metadata: log.data || {}
+                }));
+            
+            const sessionData = {
+                score: finalScore,
+                victimsSaved: gameState.victimsSaved,
+                victimsDied: gameState.victimsDied,
+                victimsTotal: gameState.victimsTotal,
+                rubbleDestroyed: gameState.rubbleDestroyed || 0,
+                finalHealth: robotState.health,
+                finalFuel: robotState.fuel,
+                duration: elapsed,
+                completedChallenge: isChallenge,
+                challengeType: isChallenge ? challengeManager.currentChallenge.title : null,
+                damageEvents: [],
+                sensorData: sensorData,      // ✨ 10Hz sensor readings
+                movementPath: movementPath,  // ✨ 1Hz movement path (sampled)
+                decisions: decisions         // ✨ All player decisions
+            };
+            
+            console.log('   📊 Data Summary:');
+            console.log('      - Sensor samples:', sensorData.length, '('+(sensorData.length / elapsed).toFixed(1)+ ' Hz)');
+            console.log('      - Movement points:', movementPath.length);
+            console.log('      - Player decisions:', decisions.length);
+            console.log('      - Visual frames:', visualFrames.length);
+            
+            try {
+                const result = await window.mongoService.finalizeSession(sessionData);
+                console.log('✅ MongoDB session uploaded!');
+                console.log('   📈 Uploaded data:');
+                console.log('      - ', sensorData.length, 'sensor readings (10Hz)');
+                console.log('      - ', movementPath.length, 'movement points (1Hz)');
+                console.log('      - ', decisions.length, 'player decisions');
+                console.log('   🍃 Check MongoDB Atlas → reacture → playersessions');
+            } catch (error) {
+                console.error('❌ MongoDB finalization failed:', error);
+                console.error('   Error details:', error.message);
+            }
+        } else {
+            console.warn('⚠️  MongoDB not available for finalization');
+        }
     }
     
     logRobotState('game_end', {
@@ -2424,12 +2724,39 @@ function updateHomepage() {
         }
         
         document.querySelector('.signInPrompt').style.display = 'none';
-        document.getElementById('logoutBtn').classList.remove('hidden');
-        document.getElementById('friendsBtn').style.display = 'block';
+        document.getElementById('topNav').classList.remove('hidden');
+        
+        // Update notification badges
+        const friendRequestsCount = userManager.currentUser.friendRequests?.length || 0;
+        const unreadNotifications = notificationManager.getUnreadCount();
+        const totalBadgeCount = friendRequestsCount + unreadNotifications;
+        
+        const badgeNav = document.getElementById('notificationBadgeNav');
+        if (badgeNav) {
+            badgeNav.textContent = totalBadgeCount;
+            badgeNav.style.display = totalBadgeCount > 0 ? 'inline' : 'none';
+        }
+        
+        // Update friend requests badge in friends tab
+        const requestsBadge = document.getElementById('requestsBadge');
+        if (requestsBadge) {
+            requestsBadge.textContent = friendRequestsCount;
+            requestsBadge.style.display = friendRequestsCount > 0 ? 'inline' : 'none';
+        }
+        
+        console.log(`🔔 Badge counts - Friend requests: ${friendRequestsCount}, Notifications: ${unreadNotifications}`);
+        
+        // Show/hide Aftermath button
+        const challengeStatus = challengeManager.getChallengeStatus();
+        const aftermathBtn = document.getElementById('viewAftermathBtn');
+        if (challengeStatus.status === 'expired' || challengeStatus.completed) {
+            aftermathBtn.classList.remove('hidden');
+        } else {
+            aftermathBtn.classList.add('hidden');
+        }
     } else {
         document.querySelector('.signInPrompt').style.display = 'block';
-        document.getElementById('logoutBtn').classList.add('hidden');
-        document.getElementById('friendsBtn').style.display = 'none';
+        document.getElementById('topNav').classList.add('hidden');
     }
 }
 
@@ -2448,15 +2775,34 @@ document.getElementById('playNowBtn').addEventListener('click', () => {
         return;
     }
     
-    showScreen('environmentScreen');
+    // Check if REACT TIME is active
+    const challengeStatus = challengeManager.getChallengeStatus();
+    
+    if (challengeStatus.status === 'active' && !challengeStatus.completed) {
+        // During REACT TIME, force user to play the challenge environment
+        const challengeEnv = challengeManager.currentChallenge.env;
+        
+        if (confirm(`⚡ REACT TIME IS LIVE!\n\nYou must complete the daily challenge:\n${challengeManager.currentChallenge.title}\n\nTime remaining: ${challengeManager.formatTimeRemaining(challengeStatus.timeRemaining)}\n\nPlay now?`)) {
+            // Skip environment selection, go straight to challenge
+            gameState.environment = challengeEnv;
+            showScreen('startScreen');
+        }
+    } else if (challengeStatus.status === 'active' && challengeStatus.completed) {
+        // Already completed today's challenge, can play normally
+        alert('✅ You already completed today\'s REACT TIME!\n\nYou can play other environments for practice.');
+        showScreen('environmentScreen');
+    } else if (challengeStatus.status === 'expired' && !challengeStatus.completed) {
+        // Missed the window
+        alert('❌ You missed today\'s REACT TIME window!\n\nThe daily challenge has expired. Come back tomorrow!\n\nYou can still play for practice.');
+        showScreen('environmentScreen');
+    } else {
+        // Normal play (before REACT TIME starts)
+        showScreen('environmentScreen');
+    }
 });
 
-document.getElementById('viewLeaderboardBtn').addEventListener('click', () => {
-    updateLeaderboard('global');
-    showScreen('leaderboardScreen');
-});
-
-document.getElementById('friendsBtn')?.addEventListener('click', () => {
+// Top Navigation Buttons
+document.getElementById('friendsNavBtn')?.addEventListener('click', () => {
     if (!userManager.currentUser) {
         alert('Please sign in first!');
         showScreen('authScreen');
@@ -2465,7 +2811,16 @@ document.getElementById('friendsBtn')?.addEventListener('click', () => {
     showFriendsScreen();
 });
 
-document.getElementById('logoutBtn')?.addEventListener('click', () => {
+document.getElementById('leaderboardNavBtn')?.addEventListener('click', () => {
+    updateLeaderboard('global');
+    showScreen('leaderboardScreen');
+});
+
+document.getElementById('notificationsNavBtn')?.addEventListener('click', () => {
+    showNotifications();
+});
+
+document.getElementById('logoutNavBtn')?.addEventListener('click', () => {
     if (confirm('Are you sure you want to logout?')) {
         userManager.signOut();
         location.reload();
@@ -2490,14 +2845,16 @@ document.getElementById('switchToSignIn').addEventListener('click', (e) => {
     document.getElementById('signInForm').classList.remove('hidden');
 });
 
-document.getElementById('signInBtn').addEventListener('click', () => {
+document.getElementById('signInBtn').addEventListener('click', async () => {
     const username = document.getElementById('signInUsername').value.trim();
-    if (!username) {
-        alert('Please enter a username');
+    const password = document.getElementById('signInPassword').value;
+    
+    if (!username || !password) {
+        alert('Please enter both username and password');
         return;
     }
     
-    const result = userManager.signIn(username);
+    const result = await userManager.signIn(username, password);
     if (result.success) {
         showScreen('homepage');
         updateHomepage();
@@ -2506,20 +2863,34 @@ document.getElementById('signInBtn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('signUpBtn').addEventListener('click', () => {
+document.getElementById('signUpBtn').addEventListener('click', async () => {
     const username = document.getElementById('signUpUsername').value.trim();
     const displayName = document.getElementById('signUpDisplayName').value.trim();
+    const password = document.getElementById('signUpPassword').value;
+    const passwordConfirm = document.getElementById('signUpPasswordConfirm').value;
     
-    if (!username || !displayName) {
+    if (!username || !displayName || !password || !passwordConfirm) {
         alert('Please fill in all fields');
         return;
     }
     
-    const createResult = userManager.createUser(username, displayName);
+    if (password.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+    }
+    
+    if (password !== passwordConfirm) {
+        alert('Passwords do not match');
+        return;
+    }
+    
+    const createResult = await userManager.createUser(username, displayName, password);
     if (createResult.success) {
-        userManager.signIn(username);
-        showScreen('homepage');
-        updateHomepage();
+        const signInResult = await userManager.signIn(username, password);
+        if (signInResult.success) {
+            showScreen('homepage');
+            updateHomepage();
+        }
     } else {
         alert(createResult.message);
     }
@@ -2529,16 +2900,43 @@ document.getElementById('backToHomeBtn').addEventListener('click', () => {
     showScreen('homepage');
 });
 
+// Enter key support for auth forms
+document.getElementById('signInPassword')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('signInBtn').click();
+    }
+});
+
+document.getElementById('signUpPasswordConfirm')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('signUpBtn').click();
+    }
+});
+
 // Environment Selection
 document.querySelectorAll('.envCard').forEach(card => {
     card.addEventListener('click', () => {
         const env = card.dataset.env;
+        console.log('🌍 Environment selected:', env);
+        
         gameState.environment = env;
         
-        // Update mission briefing
+        // Check if environment exists
         const envConfig = ENVIRONMENTS[env];
+        if (!envConfig) {
+            console.error('❌ ERROR: Environment config not found for:', env);
+            alert(`Error: Environment "${env}" not configured!`);
+            return;
+        }
+        
+        console.log('✅ Environment config found:', envConfig.name);
+        
+        // Update mission briefing
         document.getElementById('environmentName').textContent = envConfig.name;
         document.getElementById('missionDescription').textContent = envConfig.description;
+        
+        console.log('📋 Mission briefing updated');
+        console.log('🎯 Navigating to start screen...');
         
         showScreen('startScreen');
     });
@@ -2580,8 +2978,8 @@ document.getElementById('backFromLeaderboardBtn').addEventListener('click', () =
 });
 
 // Start Game
-document.getElementById('startBtn').addEventListener('click', () => {
-    initGame(gameState.environment);
+document.getElementById('startBtn').addEventListener('click', async () => {
+    await initGame(gameState.environment);
 });
 
 // Game Over
@@ -2902,10 +3300,54 @@ document.getElementById('quitToMenuBtn')?.addEventListener('click', () => {
     }
 });
 
-// REACT TIME Popup
-document.getElementById('dismissReactPopup')?.addEventListener('click', () => {
-    document.getElementById('reactTimePopup').classList.add('hidden');
-});
+// REACT TIME Popup - Attach event listener
+const dismissReactBtn = document.getElementById('dismissReactPopup');
+if (dismissReactBtn) {
+    console.log('✅ "React Now!" button found, attaching listener');
+    dismissReactBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('⚡ "React Now!" button clicked');
+        
+        const popup = document.getElementById('reactTimePopup');
+        if (popup) {
+            popup.classList.add('hidden');
+            popup.style.display = 'none';
+            console.log('✅ Popup hidden');
+        }
+        
+        // Clear countdown interval
+        if (challengeManager.countdownInterval) {
+            clearInterval(challengeManager.countdownInterval);
+            console.log('⏱️  Countdown cleared');
+        }
+        
+        // Auto-start the challenge
+        if (userManager.currentUser) {
+            const challengeStatus = challengeManager.getChallengeStatus();
+            console.log('📊 Challenge status:', challengeStatus);
+            
+            if (challengeStatus.status === 'active' && !challengeStatus.completed) {
+                const challengeEnv = challengeManager.currentChallenge.env;
+                console.log('🎯 Starting challenge environment:', challengeEnv);
+                
+                // Set environment
+                gameState.environment = challengeEnv;
+                
+                // Show start screen (mission briefing)
+                showScreen('startScreen');
+                console.log('✅ Navigated to start screen');
+            } else {
+                console.warn('⚠️  Cannot start challenge:', challengeStatus);
+                alert('Challenge is not active or already completed!');
+            }
+        } else {
+            console.error('❌ No user logged in!');
+            alert('Please sign in first!');
+        }
+    });
+} else {
+    console.error('❌ "React Now!" button NOT FOUND in DOM!');
+}
 
 // Notifications
 document.getElementById('notificationsBtn')?.addEventListener('click', () => {
@@ -2913,8 +3355,19 @@ document.getElementById('notificationsBtn')?.addEventListener('click', () => {
 });
 
 document.getElementById('markAllReadBtn')?.addEventListener('click', () => {
-    notificationManager.markAllAsRead();
-    showNotifications();
+    console.log('🗑️  Clearing all notifications...');
+    console.log('Before - Count:', notificationManager.notifications.length);
+    
+    notificationManager.markAllAsRead(); // This now clears all notifications
+    
+    console.log('After - Count:', notificationManager.notifications.length);
+    
+    // Force update badge immediately
+    setTimeout(() => {
+        updateHomepage();
+        showNotifications();
+        console.log('✅ All notifications cleared - badge updated');
+    }, 100);
 });
 
 document.getElementById('backFromNotifications')?.addEventListener('click', () => {
@@ -2956,14 +3409,146 @@ document.getElementById('backFromFriends')?.addEventListener('click', () => {
     showScreen('homepage');
 });
 
+// Aftermath Screen
+document.getElementById('viewAftermathBtn')?.addEventListener('click', () => {
+    showAftermathScreen();
+});
+
+// Debug button to manually trigger REACT TIME
+document.getElementById('debugReactTimeBtn')?.addEventListener('click', () => {
+    console.log('🐛 DEBUG: Manually triggering REACT TIME...');
+    
+    // Reset everything
+    localStorage.removeItem('reacture_dailyChallenge');
+    if (userManager.currentUser) {
+        delete userManager.currentUser.dailyChallengeCompleted;
+        userManager.saveUser();
+    }
+    challengeManager.popupShownThisSession = false;
+    
+    // Reload to generate new challenge
+    location.reload();
+});
+
+document.getElementById('backFromAftermath')?.addEventListener('click', () => {
+    showScreen('homepage');
+});
+
+async function showAftermathScreen() {
+    showScreen('aftermathScreen');
+    
+    const resultsElement = document.getElementById('aftermathResults');
+    resultsElement.innerHTML = '<div class="aftermathEmptyState">Loading today\'s results...</div>';
+    
+    // Try to fetch from MongoDB first
+    let todayResults = [];
+    
+    if (mongoService && mongoService.enabled) {
+        try {
+            todayResults = await mongoService.getTodayLeaderboard();
+        } catch (error) {
+            console.error('Failed to fetch MongoDB results:', error);
+        }
+    }
+    
+    // Fallback to local storage
+    if (todayResults.length === 0) {
+        const allUsers = userManager.getAllUsers();
+        const today = new Date().toDateString();
+        
+        todayResults = allUsers
+            .filter(user => {
+                // Filter users who completed today's challenge
+                return user.dailyChallengeCompleted === today;
+            })
+            .map(user => ({
+                playerName: user.displayName || user.username,
+                score: user.totalPoints,
+                victimsSaved: user.history.length > 0 ? user.history[user.history.length - 1].victimsSaved : 0,
+                environment: user.history.length > 0 ? user.history[user.history.length - 1].environment : 'unknown',
+                duration: user.history.length > 0 ? user.history[user.history.length - 1].time : 0
+            }))
+            .sort((a, b) => b.score - a.score);
+    }
+    
+    if (todayResults.length === 0) {
+        resultsElement.innerHTML = '<div class="aftermathEmptyState">No one has completed today\'s REACT TIME yet.<br>Be the first!</div>';
+        return;
+    }
+    
+    // Display results
+    resultsElement.innerHTML = todayResults.map((result, index) => {
+        const rank = index + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+        const minutes = Math.floor((result.duration || 0) / 60);
+        const seconds = (result.duration || 0) % 60;
+        const timeStr = `${minutes}:${String(seconds).padStart(2, '0')}`;
+        
+        return `
+            <div class="aftermathCard">
+                <div class="aftermathPlayer">
+                    <span class="aftermathRank">${medal}</span>
+                    <span>${result.playerName || result.playerId}</span>
+                </div>
+                <div class="aftermathStats">
+                    <div class="aftermathStat">
+                        <span class="aftermathStatLabel">Score:</span>
+                        <span class="aftermathStatValue">${result.score || 0} pts</span>
+                    </div>
+                    <div class="aftermathStat">
+                        <span class="aftermathStatLabel">Victims Saved:</span>
+                        <span class="aftermathStatValue">${result.victimsSaved || 0}</span>
+                    </div>
+                    <div class="aftermathStat">
+                        <span class="aftermathStatLabel">Time:</span>
+                        <span class="aftermathStatValue">${timeStr}</span>
+                    </div>
+                    <div class="aftermathStat">
+                        <span class="aftermathStatLabel">Environment:</span>
+                        <span class="aftermathStatValue">${result.environment || 'N/A'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 function showNotifications() {
     const notifications = notificationManager.notifications;
+    const friendRequests = userManager.currentUser?.friendRequests || [];
     const listElement = document.getElementById('notificationsList');
     
-    if (notifications.length === 0) {
-        listElement.innerHTML = '<p style="text-align: center; color: rgba(255,255,255,0.5); padding: 40px;">No notifications yet</p>';
-    } else {
-        listElement.innerHTML = notifications.map(notif => {
+    let html = '';
+    
+    // Show friend requests first
+    if (friendRequests.length > 0) {
+        html += '<h3 style="color: #667eea; font-size: 18px; margin-bottom: 15px;">👥 Friend Requests</h3>';
+        friendRequests.forEach(username => {
+            const user = userManager.getUser(username);
+            if (user) {
+                html += `
+                    <div class="notificationItem unread">
+                        <div class="notifTime">Friend Request</div>
+                        <div class="notifMessage">
+                            <strong>${user.displayName || username}</strong> sent you a friend request
+                            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                                <button class="friendActionBtn acceptBtn" onclick="acceptFriendAction('${username}')">✓ Accept</button>
+                                <button class="friendActionBtn declineBtn" onclick="declineFriendAction('${username}')">✗ Decline</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    }
+    
+    // Show other notifications
+    if (notifications.length > 0) {
+        if (friendRequests.length > 0) {
+            html += '<h3 style="color: #667eea; font-size: 18px; margin: 30px 0 15px;">🔔 Other Notifications</h3>';
+        }
+        
+        html += notifications.map(notif => {
             const timeAgo = getTimeAgo(notif.timestamp);
             return `
                 <div class="notificationItem ${notif.read ? '' : 'unread'}">
@@ -2974,6 +3559,11 @@ function showNotifications() {
         }).join('');
     }
     
+    if (friendRequests.length === 0 && notifications.length === 0) {
+        html = '<p style="text-align: center; color: rgba(255,255,255,0.5); padding: 40px;">No notifications yet</p>';
+    }
+    
+    listElement.innerHTML = html;
     showScreen('notificationsScreen');
 }
 
@@ -3123,21 +3713,31 @@ window.acceptFriendAction = function(username) {
     userManager.acceptFriendRequest(username);
     updateFriendsList();
     updateFriendRequests();
+    updateHomepage(); // Update badge counts
     alert(`You are now friends with ${username}!`);
 };
 
 window.declineFriendAction = function(username) {
     userManager.declineFriendRequest(username);
     updateFriendRequests();
+    updateHomepage(); // Update badge counts
 };
 
 // Screen Navigation Helper
 function showScreen(screenId) {
-    const screens = ['homepage', 'authScreen', 'environmentScreen', 'leaderboardScreen', 'startScreen', 'notificationsScreen', 'friendsScreen'];
+    const screens = ['homepage', 'authScreen', 'environmentScreen', 'leaderboardScreen', 'startScreen', 'notificationsScreen', 'friendsScreen', 'aftermathScreen'];
     screens.forEach(id => {
         document.getElementById(id).classList.add('hidden');
     });
     document.getElementById(screenId).classList.remove('hidden');
+    
+    // Show/hide top nav based on screen and login status
+    const screensWithTopNav = ['homepage', 'friendsScreen', 'leaderboardScreen', 'notificationsScreen', 'aftermathScreen'];
+    if (screensWithTopNav.includes(screenId) && userManager.currentUser) {
+        document.getElementById('topNav').classList.remove('hidden');
+    } else {
+        document.getElementById('topNav').classList.add('hidden');
+    }
 }
 
 // Window Resize
@@ -3150,7 +3750,47 @@ window.addEventListener('resize', () => {
 // Initialize - Show correct screen on page load
 if (userManager.currentUser) {
     showScreen('homepage');
+    console.log('👤 User logged in:', userManager.currentUser.username);
+    
+    // Initialize hasSeenReactTimePopup for legacy users
+    if (userManager.currentUser.hasSeenReactTimePopup === undefined) {
+        userManager.currentUser.hasSeenReactTimePopup = false;
+        userManager.saveUser();
+    }
+    
+    // Show REACT TIME popup 5 seconds after opening app (only first time for each user)
+    if (!userManager.currentUser.hasSeenReactTimePopup) {
+        console.log('⏰ First time user - will show REACT TIME in 5 seconds...');
+        setTimeout(() => {
+            console.log('⚡ 5 seconds passed - checking for REACT TIME popup...');
+            const status = challengeManager.getChallengeStatus();
+            console.log('📊 Challenge status:', status);
+            
+            if (status.status === 'active' && !status.completed) {
+                console.log('🎯 Showing first-time REACT TIME popup!');
+                challengeManager.showReactTimePopup();
+                
+                // Mark as seen so it doesn't show again
+                userManager.currentUser.hasSeenReactTimePopup = true;
+                userManager.saveUser();
+                console.log('✅ Marked popup as seen for this user');
+            } else {
+                console.log('⏭️  Not showing popup:', status);
+            }
+        }, 5000); // Show after 5 seconds
+    } else {
+        console.log('👁️  User has already seen REACT TIME popup before');
+        // For returning users, show popup immediately if challenge is active and not completed
+        setTimeout(() => {
+            const status = challengeManager.getChallengeStatus();
+            if (status.status === 'active' && !status.completed) {
+                console.log('🔄 Showing REACT TIME popup for returning user');
+                challengeManager.showReactTimePopup();
+            }
+        }, 500);
+    }
 } else {
+    console.log('🔒 No user logged in - showing auth screen');
     showScreen('authScreen');
 }
 

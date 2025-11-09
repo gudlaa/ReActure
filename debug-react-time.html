@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>REACT TIME Debug</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #00ff00; }
+        .section { margin: 20px 0; padding: 15px; background: #2a2a2a; border-radius: 8px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .error { color: #ff5555; }
+        .success { color: #55ff55; }
+        .info { color: #5555ff; }
+    </style>
+</head>
+<body>
+    <h1>⚡ REACT TIME Debug Tool</h1>
+    
+    <div class="section">
+        <h2>Step 1: Check Console</h2>
+        <p>Open browser console (F12) and look for these messages:</p>
+        <ul>
+            <li>👤 User logged in: ...</li>
+            <li>⚡ Checking for REACT TIME popup...</li>
+            <li>📊 Challenge status: ...</li>
+            <li>🎯 Conditions met - showing popup!</li>
+        </ul>
+        <button onclick="checkConsole()">Show Expected Console Output</button>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Check Challenge Status</h2>
+        <button onclick="checkChallenge()">Check Challenge Status</button>
+        <pre id="challengeOutput"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Check User Status</h2>
+        <button onclick="checkUser()">Check User Status</button>
+        <pre id="userOutput"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 4: Check Popup Element</h2>
+        <button onclick="checkPopup()">Check Popup Element</button>
+        <pre id="popupOutput"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 5: Force Trigger Popup</h2>
+        <button onclick="forceTrigger()">Force Show Popup</button>
+        <pre id="triggerOutput"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 6: Reset Everything</h2>
+        <button onclick="resetAll()">Complete Reset</button>
+        <pre id="resetOutput"></pre>
+    </div>
+
+    <script>
+        function checkConsole() {
+            console.log('Expected console output when page loads:');
+            console.log('👤 User logged in: your_username');
+            console.log('⚡ Checking for REACT TIME popup...');
+            console.log('📊 Challenge status: {status: "active", timeRemaining: 540000, completed: false}');
+            console.log('🎯 Conditions met - showing popup!');
+            console.log('🔍 Checking REACT TIME popup...');
+            console.log('  hasShownPopup: false');
+            console.log('  Challenge status: {...}');
+            console.log('  ⚡ SHOWING REACT TIME POPUP!');
+            console.log('  Popup element: Found');
+            console.log('  ✅ Popup displayed!');
+            alert('Check your browser console (F12) for these messages');
+        }
+
+        function checkChallenge() {
+            const output = document.getElementById('challengeOutput');
+            const stored = localStorage.getItem('reacture_dailyChallenge');
+            
+            if (!stored) {
+                output.innerHTML = '<span class="error">❌ No challenge found in localStorage</span>';
+                return;
+            }
+            
+            const challenge = JSON.parse(stored);
+            const now = Date.now();
+            
+            output.innerHTML = `
+<span class="success">✅ Challenge Found:</span>
+Title: ${challenge.title}
+Date: ${challenge.date}
+Time: ${new Date(challenge.time).toLocaleString()}
+Expires: ${new Date(challenge.expiresAt).toLocaleString()}
+
+<span class="info">Current Time: ${new Date(now).toLocaleString()}</span>
+
+Status:
+- Is Active: ${now >= challenge.time && now < challenge.expiresAt}
+- Time Until Start: ${challenge.time - now > 0 ? Math.floor((challenge.time - now) / 1000) + 's' : 'Already started'}
+- Time Remaining: ${challenge.expiresAt - now > 0 ? Math.floor((challenge.expiresAt - now) / 60000) + 'm' : 'Expired'}
+            `;
+        }
+
+        function checkUser() {
+            const output = document.getElementById('userOutput');
+            const currentUser = localStorage.getItem('reacture_currentUser');
+            
+            if (!currentUser) {
+                output.innerHTML = '<span class="error">❌ No user logged in</span>';
+                return;
+            }
+            
+            const users = JSON.parse(localStorage.getItem('reacture_users') || '{}');
+            const user = users[currentUser];
+            const today = new Date().toDateString();
+            
+            output.innerHTML = `
+<span class="success">✅ User Logged In:</span>
+Username: ${user.username}
+Display Name: ${user.displayName}
+Daily Challenge Completed: ${user.dailyChallengeCompleted}
+Today's Date: ${today}
+Has Completed Today: ${user.dailyChallengeCompleted === today}
+            `;
+        }
+
+        function checkPopup() {
+            const output = document.getElementById('popupOutput');
+            
+            // Try to access from parent window (main app)
+            if (window.opener) {
+                const popup = window.opener.document.getElementById('reactTimePopup');
+                output.innerHTML = `
+<span class="${popup ? 'success' : 'error'}">${popup ? '✅' : '❌'} Popup Element ${popup ? 'Found' : 'NOT FOUND'}</span>
+${popup ? `
+Has Hidden Class: ${popup.classList.contains('hidden')}
+Display Style: ${window.opener.getComputedStyle(popup).display}
+Z-Index: ${window.opener.getComputedStyle(popup).zIndex}
+` : ''}
+                `;
+            } else {
+                output.innerHTML = '<span class="error">❌ Open this from the main app window</span>';
+            }
+        }
+
+        function forceTrigger() {
+            const output = document.getElementById('triggerOutput');
+            
+            const script = `
+// Force trigger REACT TIME
+localStorage.removeItem('reacture_dailyChallenge');
+if (userManager && userManager.currentUser) {
+    delete userManager.currentUser.dailyChallengeCompleted;
+    userManager.saveUser();
+}
+if (challengeManager) {
+    challengeManager.hasShownPopup = false;
+}
+location.reload();
+            `;
+            
+            output.innerHTML = `
+<span class="info">Copy and paste this into your main app console:</span>
+
+<textarea style="width: 100%; height: 150px; margin: 10px 0;">${script}</textarea>
+
+<button onclick="navigator.clipboard.writeText(\`${script.replace(/`/g, '\\`')}\`)">Copy to Clipboard</button>
+            `;
+        }
+
+        function resetAll() {
+            const output = document.getElementById('resetOutput');
+            
+            const script = `localStorage.clear(); location.reload();`;
+            
+            output.innerHTML = `
+<span class="info">Complete reset - paste in console:</span>
+
+<textarea style="width: 100%; height: 50px; margin: 10px 0;">${script}</textarea>
+
+<button onclick="navigator.clipboard.writeText('${script}')">Copy to Clipboard</button>
+            `;
+        }
+    </script>
+</body>
+</html>
+

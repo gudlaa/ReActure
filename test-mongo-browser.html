@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MongoDB Browser Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #000; color: #0f0; }
+        button { padding: 15px 30px; margin: 10px; background: #0f0; color: #000; border: none; cursor: pointer; font-size: 16px; font-weight: bold; }
+        pre { background: #1a1a1a; padding: 15px; border-radius: 5px; border: 1px solid #0f0; }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+    </style>
+</head>
+<body>
+    <h1>🍃 MongoDB Browser Connection Test</h1>
+    
+    <h2>Step 1: Check if Backend is Reachable</h2>
+    <button onclick="testBackend()">Test Backend</button>
+    <pre id="backendResult"></pre>
+
+    <h2>Step 2: Create a Test Session</h2>
+    <button onclick="createSession()">Create Session</button>
+    <pre id="sessionResult"></pre>
+
+    <h2>Step 3: View All Sessions</h2>
+    <button onclick="viewSessions()">View Sessions</button>
+    <pre id="viewResult"></pre>
+
+    <h2>Instructions for Main App:</h2>
+    <p>Open your main game at <a href="http://localhost:8000" target="_blank">http://localhost:8000</a></p>
+    <p>Then open console (F12) and paste this:</p>
+    <pre>
+// Test if mongoService is loaded
+console.log('mongoService:', typeof mongoService);
+console.log('enabled:', mongoService?.enabled);
+
+// Test create session
+if (mongoService && userManager.currentUser) {
+    mongoService.createSession({
+        playerId: userManager.currentUser.username,
+        playerName: userManager.currentUser.displayName,
+        sessionId: 'test_' + Date.now(),
+        environment: 'earthquake',
+        victimsTotal: 5
+    }).then(result => {
+        console.log('Session created:', result);
+        alert('Check MongoDB Atlas now!');
+    }).catch(err => {
+        console.error('Error:', err);
+    });
+}
+    </pre>
+
+    <script>
+        const API = 'http://localhost:3001/api';
+
+        async function testBackend() {
+            const el = document.getElementById('backendResult');
+            el.textContent = 'Testing...';
+            
+            try {
+                const response = await fetch('http://localhost:3001/health');
+                const data = await response.json();
+                el.innerHTML = `<span class="success">✅ Backend Connected!</span>\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                el.innerHTML = `<span class="error">❌ Backend Not Reachable</span>\n${error.message}`;
+            }
+        }
+
+        async function createSession() {
+            const el = document.getElementById('sessionResult');
+            el.textContent = 'Creating session...';
+            
+            const data = {
+                playerId: 'browser_test',
+                playerName: 'Browser Test User',
+                sessionId: 'browser_' + Date.now(),
+                environment: 'earthquake',
+                victimsTotal: 5
+            };
+            
+            try {
+                const response = await fetch(`${API}/session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                el.innerHTML = `<span class="success">✅ Session Created!</span>\n${JSON.stringify(result, null, 2)}`;
+                alert('✅ Session created! Check MongoDB Atlas → Browse Collections!');
+            } catch (error) {
+                el.innerHTML = `<span class="error">❌ Error</span>\n${error.message}`;
+            }
+        }
+
+        async function viewSessions() {
+            const el = document.getElementById('viewResult');
+            el.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(`${API}/leaderboard`);
+                const data = await response.json();
+                el.innerHTML = `<span class="success">✅ Found ${data.count} sessions</span>\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                el.innerHTML = `<span class="error">❌ Error</span>\n${error.message}`;
+            }
+        }
+
+        // Auto-test on load
+        testBackend();
+    </script>
+</body>
+</html>
+

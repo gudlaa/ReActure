@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test MongoDB Integration</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0; }
+        .box { background: #2a2a2a; border: 2px solid #0f0; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        button { padding: 15px 30px; margin: 10px; background: #0f0; color: #000; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; }
+        button:hover { background: #0ff; }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .info { color: #0ff; }
+        pre { background: #000; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🍃 MongoDB Integration Test</h1>
+    
+    <div class="box">
+        <h2>✅ Backend Status</h2>
+        <p id="backendStatus">Checking...</p>
+        <button onclick="checkBackend()">Refresh Check</button>
+    </div>
+
+    <div class="box">
+        <h2>🧪 Test Create Session</h2>
+        <button onclick="testCreateSession()">Create Test Session</button>
+        <pre id="createResult"></pre>
+    </div>
+
+    <div class="box">
+        <h2>📊 View All Sessions</h2>
+        <button onclick="viewSessions()">Get Leaderboard</button>
+        <pre id="sessionsResult"></pre>
+    </div>
+
+    <div class="box">
+        <h2>📈 Database Stats</h2>
+        <button onclick="getStats()">Get Stats</button>
+        <pre id="statsResult"></pre>
+    </div>
+
+    <div class="box">
+        <h2>🔍 What To Do</h2>
+        <ol>
+            <li>Click "Refresh Check" - Should show ✅ Backend Connected</li>
+            <li>Click "Create Test Session" - Should create a session in MongoDB</li>
+            <li>Click "Get Leaderboard" - Should show the test session</li>
+            <li>Go to MongoDB Atlas → Browse Collections → Should see data!</li>
+        </ol>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3001';
+
+        async function checkBackend() {
+            const statusEl = document.getElementById('backendStatus');
+            statusEl.innerHTML = 'Checking...';
+            
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                statusEl.innerHTML = `<span class="success">✅ Backend Connected!</span><br>Service: ${data.service}<br>Time: ${data.timestamp}`;
+            } catch (error) {
+                statusEl.innerHTML = `<span class="error">❌ Backend Not Responding</span><br>Error: ${error.message}<br><br>Start backend with: cd server && npm start`;
+            }
+        }
+
+        async function testCreateSession() {
+            const resultEl = document.getElementById('createResult');
+            resultEl.textContent = 'Creating session...';
+            
+            const sessionData = {
+                playerId: 'test_user_' + Date.now(),
+                playerName: 'Test User',
+                sessionId: 'test_session_' + Date.now(),
+                environment: 'earthquake',
+                victimsTotal: 5
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/api/session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sessionData)
+                });
+                
+                const data = await response.json();
+                resultEl.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    alert('✅ Session created in MongoDB! Check Atlas dashboard!');
+                }
+            } catch (error) {
+                resultEl.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function viewSessions() {
+            const resultEl = document.getElementById('sessionsResult');
+            resultEl.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/leaderboard`);
+                const data = await response.json();
+                resultEl.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.leaderboard && data.leaderboard.length > 0) {
+                    alert(`✅ Found ${data.leaderboard.length} sessions in MongoDB!`);
+                } else {
+                    alert('ℹ️ No sessions found yet. Play a game or create test session.');
+                }
+            } catch (error) {
+                resultEl.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function getStats() {
+            const resultEl = document.getElementById('statsResult');
+            resultEl.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/dataset/stats`);
+                const data = await response.json();
+                resultEl.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultEl.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Auto-check on load
+        checkBackend();
+    </script>
+</body>
+</html>
+
