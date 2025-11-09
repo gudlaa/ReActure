@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import sessionRoutes from './routes/session.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import datasetRoutes from './routes/dataset.js';
+import statsRoutes from './routes/stats.js';
 import dbConnect from './lib/dbConnect.js';
 
 // Load environment variables
@@ -18,7 +19,18 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:8000',
+    'https://localhost:8000',
+    'http://reacture.tech',
+    'https://reacture.tech',
+    'http://www.reacture.tech',
+    'https://www.reacture.tech',
+    'https://gudlaa.github.io'
+  ],
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -46,6 +58,7 @@ app.get('/health', (req, res) => {
 app.use('/api/session', sessionRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/dataset', datasetRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
