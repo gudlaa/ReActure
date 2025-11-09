@@ -182,9 +182,9 @@
                     <p id="missionDescription">A disaster has struck. Multiple victims are trapped under rubble.</p>
                     <p>Your mission: Rescue all victims before their health depletes.</p>
                     <ul class="missionList">
-                        <li>🔍 Locate victims trapped under rubble (E to scan)</li>
+                        <li>🔍 X-ray scan to see through rubble (E key - 3 seconds)</li>
                         <li>💥 Destroy rubble to clear paths (Space key)</li>
-                        <li>🆘 Rescue victims when accessible (F key or Click)</li>
+                        <li>🆘 Click mouse to rescue when victim pulses green</li>
                         <li>⚡ Manage your fuel and health</li>
                         <li>⚠️ Avoid hazard zones carefully</li>
                         <li>⛽ Refuel at the station when needed (R key)</li>
@@ -202,16 +202,16 @@
                             <span>Look Around</span>
                         </div>
                         <div class="controlItem">
-                            <kbd>Space</kbd>
-                            <span>Destroy Rubble</span>
-                        </div>
-                        <div class="controlItem">
                             <kbd>E</kbd>
-                            <span>Inspect (infrared)</span>
+                            <span>X-ray Scan</span>
                         </div>
                         <div class="controlItem">
-                            <kbd>F / Click</kbd>
-                            <span>Rescue Victim</span>
+                            <kbd>Space</kbd>
+                            <span>Destroy</span>
+                        </div>
+                        <div class="controlItem">
+                            <kbd>Click</kbd>
+                            <span>Rescue</span>
                         </div>
                         <div class="controlItem">
                             <kbd>R</kbd>
@@ -294,15 +294,15 @@
                         <span>Look</span>
                     </div>
                     <div class="controlRow">
+                        <kbd>E</kbd>
+                        <span>X-ray Scan</span>
+                    </div>
+                    <div class="controlRow">
                         <kbd>Space</kbd>
                         <span>Destroy</span>
                     </div>
                     <div class="controlRow">
-                        <kbd>E</kbd>
-                        <span>Inspect</span>
-                    </div>
-                    <div class="controlRow">
-                        <kbd>F / Click</kbd>
+                        <kbd>Click</kbd>
                         <span>Rescue</span>
                     </div>
                     <div class="controlRow">
@@ -347,6 +347,8 @@
                 <p>🖱️ Click to enable mouse look</p>
                 <p class="promptSmall">Press ESC to release</p>
             </div>
+            
+            <div id="rescueMessage" class="rescueMessage hidden"></div>
         </div>
 
         <canvas id="gameCanvas" class="hidden"></canvas>

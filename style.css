@@ -1103,6 +1103,36 @@ body {
     font-family: 'Roboto', sans-serif !important;
 }
 
+/* Rescue Message */
+.rescueMessage {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 15px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border: 3px solid #4CAF50;
+    box-shadow: 0 0 30px rgba(76, 175, 80, 0.8);
+}
+
+.rescueMessage.hidden {
+    display: none;
+}
+
+.rescueMessage.show {
+    opacity: 1;
+    display: block;
+}
+
 /* Game Over Screen */
 #gameOverScreen {
     position: fixed;

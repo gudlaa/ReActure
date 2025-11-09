@@ -913,14 +913,9 @@ const handleKeyDown = (event) => {
             refuel();
             break;
         case 'KeyE':
-            console.log('✅ E pressed - Inspect mode');
-            // Inspect - briefly reveal nearby victims
+            console.log('✅ E pressed - Inspect mode (X-ray vision)');
+            // Inspect - see through rubble to find victims
             inspectVictims();
-            break;
-        case 'KeyF':
-            console.log('✅ F pressed - Rescue attempt');
-            // Manual rescue
-            attemptRescue();
             break;
     }
 };
@@ -1062,74 +1057,71 @@ function inspectVictims() {
     gameState.inspectMode = true;
     logPlayerAction('inspect_start');
     
-    // Infrared camera - raycast forward to detect what's in front
-    const raycaster = new THREE.Raycaster();
+    // X-ray vision - see victims through rubble!
     const cameraDirection = new THREE.Vector3();
     camera.getWorldDirection(cameraDirection);
     
-    raycaster.set(camera.position, cameraDirection);
-    raycaster.far = 20; // 20m range
+    // Make rubble transparent during inspect
+    rubblePieces.forEach(piece => {
+        if (!piece.userData.destroyed) {
+            piece.material.transparent = true;
+            piece.material.opacity = 0.3; // Semi-transparent
+            piece.userData.wasInspectTransparent = true;
+        }
+    });
     
-    // Check for victims in front
-    const victimMeshes = victims.filter(v => !v.userData.saved && !v.userData.died);
-    const intersects = raycaster.intersectObjects(victimMeshes);
-    
-    // Also detect nearby victims within cone of vision
+    // Highlight victims in cone of vision
     victims.forEach(victim => {
         if (victim.userData.saved || victim.userData.died) return;
         
         const toVictim = new THREE.Vector3().subVectors(victim.position, camera.position);
         const distance = toVictim.length();
         
-        if (distance < 20) { // Within 20m
+        if (distance < 25) { // Within 25m
             toVictim.normalize();
             const angle = cameraDirection.angleTo(toVictim);
             
-            // Within 60-degree cone in front of camera
-            if (angle < Math.PI / 3) {
-                // Infrared glow effect - red/orange heat signature
-                victim.material.emissive = new THREE.Color(0xff4400);
-                victim.material.emissiveIntensity = 1.0;
+            // Within 90-degree cone in front of camera (wider for easier detection)
+            if (angle < Math.PI / 2) {
+                // X-ray effect - bright glowing victim visible through everything
+                victim.material.emissive = new THREE.Color(0xff0000);
+                victim.material.emissiveIntensity = 1.5;
+                victim.material.transparent = true;
+                victim.material.opacity = 1.0;
+                victim.material.depthTest = false; // Render through everything!
                 victim.userData.inspectPulse = 0;
                 
-                // Make slightly visible through obstacles
-                victim.material.opacity = 1.0;
+                console.log('👁️ Victim detected through rubble at', distance.toFixed(1) + 'm');
             }
         }
     });
     
-    // Show rubble in front too (infrared sees solid objects)
-    const rubbleMeshes = rubblePieces.filter(p => !p.userData.destroyed);
-    const rubbleIntersects = raycaster.intersectObjects(rubbleMeshes);
-    rubbleIntersects.slice(0, 5).forEach(intersect => {
-        intersect.object.material.emissive = new THREE.Color(0x4444ff);
-        intersect.object.material.emissiveIntensity = 0.3;
-        intersect.object.userData.inspectGlow = true;
-    });
-    
-    // Clear inspect mode after 2.5 seconds
+    // Clear inspect mode after 3 seconds
     if (gameState.inspectTimeout) clearTimeout(gameState.inspectTimeout);
     gameState.inspectTimeout = setTimeout(() => {
         gameState.inspectMode = false;
         
-        // Remove all highlights
+        // Restore rubble opacity
+        rubblePieces.forEach(piece => {
+            if (piece.userData.wasInspectTransparent) {
+                piece.material.opacity = 1.0;
+                piece.material.transparent = false;
+                delete piece.userData.wasInspectTransparent;
+            }
+        });
+        
+        // Remove victim highlights
         victims.forEach(victim => {
             victim.material.emissive = new THREE.Color(0x000000);
             victim.material.emissiveIntensity = 0;
+            victim.material.depthTest = true; // Restore normal rendering
+            victim.material.transparent = false;
             victim.material.opacity = 1.0;
             delete victim.userData.inspectPulse;
         });
         
-        rubblePieces.forEach(piece => {
-            if (piece.userData.inspectGlow) {
-                piece.material.emissive = new THREE.Color(0x000000);
-                piece.material.emissiveIntensity = 0;
-                delete piece.userData.inspectGlow;
-            }
-        });
-        
         logPlayerAction('inspect_end');
-    }, 2500);
+    }, 3000);
 }
 
 // ========================================
@@ -1242,9 +1234,9 @@ function checkVictimAccessibility() {
     });
 }
 
-// Manual rescue function - called when player presses F or clicks
+// Manual rescue function - called when player clicks
 function attemptRescue() {
-    console.log('🆘 Attempting rescue...');
+    console.log('🆘 Click! Attempting rescue...');
     
     // Find closest accessible victim
     let closestVictim = null;
@@ -1264,45 +1256,84 @@ function attemptRescue() {
     
     if (closestVictim) {
         rescueVictim(closestVictim);
-        console.log('✅ Victim rescued!');
+        console.log('✅ VICTIM RESCUED! Disappearing from scene...');
+        showRescueMessage('✅ Victim Rescued! +' + (100 + Math.floor(closestVictim.userData.health * 2)));
     } else {
-        console.log('❌ No accessible victim nearby. Clear more rubble!');
+        console.log('❌ No accessible victim nearby. Clear more rubble or get closer!');
+        showRescueMessage('❌ No victim in range. Clear rubble first!');
+    }
+}
+
+// Show temporary rescue feedback message
+function showRescueMessage(message) {
+    const messageDiv = document.getElementById('rescueMessage');
+    if (messageDiv) {
+        messageDiv.textContent = message;
+        messageDiv.classList.remove('hidden');
+        messageDiv.classList.add('show');
+        
+        setTimeout(() => {
+            messageDiv.classList.remove('show');
+            setTimeout(() => {
+                messageDiv.classList.add('hidden');
+            }, 300);
+        }, 2000);
     }
 }
 
 function rescueVictim(victim) {
     if (victim.userData.saved) return;
     
+    console.log('🎉 RESCUING VICTIM! Health:', victim.userData.health);
+    
     victim.userData.saved = true;
     gameState.victimsSaved++;
     
     // Calculate score based on victim's remaining health
     const healthBonus = Math.floor(victim.userData.health * 2);
-    const speedBonus = Math.floor(Math.max(0, (180 - gameState.elapsedTime) * 0.5)); // Bonus for speed
+    const speedBonus = Math.floor(Math.max(0, (180 - gameState.elapsedTime) * 0.5));
     const totalBonus = 100 + healthBonus + speedBonus;
     
     gameState.score += totalBonus;
     updateScore();
     
-    // Animate rescue
-    victim.material.transparent = true;
-    const tween = { scale: 1, opacity: 1, y: victim.position.y };
+    console.log('💰 Score +' + totalBonus + ' (Base: 100, Health: ' + healthBonus + ', Speed: ' + speedBonus + ')');
     
-    const animate = () => {
-        tween.scale -= 0.02;
-        tween.opacity -= 0.02;
-        tween.y += 0.05;
+    // Immediately hide victim, then animate upward fade
+    victim.material.transparent = true;
+    victim.material.depthTest = true; // Restore normal depth testing
+    
+    const tween = { 
+        scale: 1, 
+        opacity: 1, 
+        y: victim.position.y,
+        glow: 0
+    };
+    
+    const animateRescue = () => {
+        tween.scale -= 0.03;
+        tween.opacity -= 0.03;
+        tween.y += 0.1; // Rise faster
+        tween.glow += 0.05;
+        
         victim.scale.set(tween.scale, tween.scale, tween.scale);
         victim.material.opacity = tween.opacity;
         victim.position.y = tween.y;
         
-        if (tween.scale > 0) {
-            requestAnimationFrame(animate);
+        // Bright white glow during rescue
+        victim.material.emissive = new THREE.Color(0xffffff);
+        victim.material.emissiveIntensity = Math.min(2.0, tween.glow);
+        
+        if (tween.scale > 0 && tween.opacity > 0) {
+            requestAnimationFrame(animateRescue);
         } else {
+            // Completely remove from scene
             scene.remove(victim);
+            victim.visible = false;
+            console.log('✨ Victim removed from scene');
         }
     };
-    animate();
+    animateRescue();
     
     logPlayerAction('rescue_victim', {
         victimId: victims.indexOf(victim),
@@ -1310,7 +1341,10 @@ function rescueVictim(victim) {
         score: totalBonus
     });
     
+    // Update UI immediately
     updateVictimCount();
+    console.log('📊 Updated counts - Saved:', gameState.victimsSaved, 'Remaining:', gameState.victimsTotal - gameState.victimsSaved);
+    
     checkGameOver();
 }
 
@@ -1707,9 +1741,25 @@ function updateUI() {
 }
 
 function updateVictimCount() {
-    document.getElementById('savedCount').textContent = gameState.victimsSaved;
-    document.getElementById('remainingCount').textContent = 
-        gameState.victimsTotal - gameState.victimsSaved;
+    const remaining = gameState.victimsTotal - gameState.victimsSaved - gameState.victimsDied;
+    
+    const savedElement = document.getElementById('savedCount');
+    const remainingElement = document.getElementById('remainingCount');
+    
+    if (savedElement) {
+        savedElement.textContent = gameState.victimsSaved;
+    }
+    
+    if (remainingElement) {
+        remainingElement.textContent = remaining;
+    }
+    
+    console.log('📊 Victim Count Updated:', {
+        saved: gameState.victimsSaved,
+        died: gameState.victimsDied,
+        total: gameState.victimsTotal,
+        remaining: remaining
+    });
 }
 
 function updateScore() {
