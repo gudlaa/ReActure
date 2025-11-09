@@ -55,9 +55,34 @@
                 <div class="actionButtons">
                     <button id="playNowBtn" class="primaryBtn">⚡ Play Now</button>
                     <button id="viewLeaderboardBtn" class="secondaryBtn">📊 Leaderboard</button>
+                    <button id="notificationsBtn" class="secondaryBtn">🔔 Notifications <span id="notificationBadge" class="notifBadge">0</span></button>
                 </div>
                 
                 <p class="signInPrompt">Not logged in? <a href="#" id="signInLink">Sign In</a></p>
+            </div>
+        </div>
+        
+        <!-- REACT TIME Popup -->
+        <div id="reactTimePopup" class="reactPopup hidden">
+            <div class="reactPopupContent">
+                <div class="reactPopupIcon">⚡</div>
+                <h1 id="popupChallengeTitle">REACT TIME!</h1>
+                <p id="popupChallengeDescription">It's time to react!</p>
+                <button id="dismissReactPopup" class="primaryBtn">Let's Go!</button>
+            </div>
+        </div>
+        
+        <!-- Notifications Screen -->
+        <div id="notificationsScreen" class="hidden">
+            <div class="notificationsContent">
+                <div class="notifHeader">
+                    <h1>🔔 Notifications</h1>
+                    <button id="markAllReadBtn" class="smallBtn">Mark All Read</button>
+                </div>
+                <div id="notificationsList" class="notificationsList">
+                    <!-- Populated dynamically -->
+                </div>
+                <button id="backFromNotifications" class="backBtn">← Back</button>
             </div>
         </div>
         
@@ -181,8 +206,16 @@
                             <span>Jump / Destroy</span>
                         </div>
                         <div class="controlItem">
+                            <kbd>E</kbd>
+                            <span>Inspect (reveal victims)</span>
+                        </div>
+                        <div class="controlItem">
                             <kbd>R</kbd>
                             <span>Refuel</span>
+                        </div>
+                        <div class="controlItem">
+                            <kbd>ESC</kbd>
+                            <span>Pause</span>
                         </div>
                     </div>
                 </div>
@@ -297,11 +330,34 @@
 
         <canvas id="gameCanvas" class="hidden"></canvas>
         
+        <!-- Pause Menu -->
+        <div id="pauseMenu" class="pauseMenu hidden">
+            <div class="pauseContent">
+                <h1>⏸️ Paused</h1>
+                <p>Press ESC to resume</p>
+                <div class="pauseButtons">
+                    <button id="resumeBtn" class="primaryBtn">▶️ Resume</button>
+                    <button id="quitToMenuBtn" class="secondaryBtn">🏠 Quit to Menu</button>
+                </div>
+                <div class="pauseInfo">
+                    <p><kbd>ESC</kbd> - Pause/Resume</p>
+                    <p><kbd>E</kbd> - Inspect (reveals nearby victims)</p>
+                    <p><kbd>Space</kbd> - Jump (moving) / Destroy (stationary)</p>
+                </div>
+            </div>
+        </div>
+        
         <div id="gameOverScreen" class="hidden">
             <div class="gameOverContent">
                 <h1 id="gameOverTitle">Mission Complete</h1>
                 <div id="gameOverStats"></div>
                 <div id="scoreBreakdown" class="scoreBreakdown"></div>
+                <div id="shareSection" class="shareSection">
+                    <h3>Share Your Results</h3>
+                    <button id="shareTwitterBtn" class="shareBtn">🐦 Share on Twitter</button>
+                    <button id="shareFacebookBtn" class="shareBtn">📘 Share on Facebook</button>
+                    <button id="copyResultsBtn" class="shareBtn">📋 Copy Summary</button>
+                </div>
                 <div class="buttonGroup">
                     <button id="restartBtn" class="primaryBtn">Play Again</button>
                     <button id="downloadLogsBtn" class="secondaryBtn">📥 Download Data</button>

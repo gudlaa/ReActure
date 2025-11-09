@@ -146,15 +146,16 @@ const userManager = new UserManager();
 class ChallengeManager {
     constructor() {
         this.dailyChallenges = [
-            { title: "Earthquake in Tokyo", description: "A massive 8.5 earthquake has struck Tokyo. React now!", icon: "🏚️", env: "earthquake" },
-            { title: "Tsunami Alert - Pacific", description: "A meteor just hit the Pacific. Tsunami incoming!", icon: "🌊", env: "tsunami" },
-            { title: "California Wildfire", description: "Wildfires spreading rapidly across California!", icon: "🔥", env: "wildfire" },
-            { title: "New York Building Collapse", description: "Multiple buildings collapsed in Manhattan!", icon: "🏢", env: "earthquake" },
-            { title: "Coastal Flooding Crisis", description: "Unprecedented flooding hits coastal cities!", icon: "💧", env: "tsunami" },
-            { title: "Forest Fire Emergency", description: "National forest engulfed in flames!", icon: "🌲", env: "wildfire" }
+            { title: "REACT TIME: Tokyo Earthquake", description: "2 minutes until aftershock! Rescue now!", icon: "🏚️", env: "earthquake", reactTime: 120 },
+            { title: "REACT TIME: Pacific Tsunami", description: "2 minutes until wave hits! Get victims to high ground!", icon: "🌊", env: "tsunami", reactTime: 120 },
+            { title: "REACT TIME: California Wildfire", description: "90 seconds until fire spreads! Clear the zone!", icon: "🔥", env: "wildfire", reactTime: 90 },
+            { title: "REACT TIME: Volcanic Eruption", description: "2 minutes until volcanic eruption! Evacuate now!", icon: "🌋", env: "wildfire", reactTime: 120 },
+            { title: "REACT TIME: Building Collapse", description: "3 minutes before total collapse! Save everyone!", icon: "🏢", env: "earthquake", reactTime: 180 },
+            { title: "REACT TIME: Flash Flood", description: "90 seconds until water surge! Rescue trapped victims!", icon: "💧", env: "tsunami", reactTime: 90 }
         ];
         
         this.currentChallenge = this.getDailyChallenge();
+        this.hasShownPopup = false;
     }
     
     getDailyChallenge() {
@@ -215,6 +216,35 @@ class ChallengeManager {
         
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
+    
+    showReactTimePopup() {
+        if (this.hasShownPopup) return;
+        
+        const status = this.getChallengeStatus();
+        if (status.status === 'active') {
+            this.hasShownPopup = true;
+            const popup = document.getElementById('reactTimePopup');
+            const challengeTitle = document.getElementById('popupChallengeTitle');
+            const challengeDesc = document.getElementById('popupChallengeDescription');
+            
+            if (popup) {
+                challengeTitle.textContent = this.currentChallenge.title;
+                challengeDesc.textContent = this.currentChallenge.description;
+                popup.classList.remove('hidden');
+                
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    popup.classList.add('hidden');
+                }, 10000);
+            }
+            
+            // Send notification
+            notificationManager.addNotification('react_time', 
+                `⚡ ${this.currentChallenge.title} is LIVE NOW!`,
+                { challenge: this.currentChallenge }
+            );
+        }
+    }
 }
 
 const challengeManager = new ChallengeManager();
@@ -260,6 +290,73 @@ const ENVIRONMENTS = {
 };
 
 // ========================================
+// NOTIFICATIONS SYSTEM
+// ========================================
+
+class NotificationManager {
+    constructor() {
+        this.notifications = this.loadNotifications();
+    }
+    
+    loadNotifications() {
+        return JSON.parse(localStorage.getItem('reacture_notifications') || '[]');
+    }
+    
+    saveNotifications() {
+        localStorage.setItem('reacture_notifications', JSON.stringify(this.notifications));
+    }
+    
+    addNotification(type, message, data = {}) {
+        this.notifications.unshift({
+            id: Date.now(),
+            type,
+            message,
+            data,
+            read: false,
+            timestamp: Date.now()
+        });
+        
+        // Keep only last 50 notifications
+        if (this.notifications.length > 50) {
+            this.notifications = this.notifications.slice(0, 50);
+        }
+        
+        this.saveNotifications();
+        this.updateBadge();
+    }
+    
+    markAsRead(id) {
+        const notif = this.notifications.find(n => n.id === id);
+        if (notif) {
+            notif.read = true;
+            this.saveNotifications();
+            this.updateBadge();
+        }
+    }
+    
+    markAllAsRead() {
+        this.notifications.forEach(n => n.read = true);
+        this.saveNotifications();
+        this.updateBadge();
+    }
+    
+    getUnreadCount() {
+        return this.notifications.filter(n => !n.read).length;
+    }
+    
+    updateBadge() {
+        const badge = document.getElementById('notificationBadge');
+        const count = this.getUnreadCount();
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'block' : 'none';
+        }
+    }
+}
+
+const notificationManager = new NotificationManager();
+
+// ========================================
 // GAME STATE
 // ========================================
 
@@ -268,12 +365,16 @@ const gameState = {
     elapsedTime: 0,
     victimsSaved: 0,
     victimsTotal: 0,
+    victimsDied: 0,
     isGameOver: false,
     isGameStarted: false,
+    isPaused: false,
     score: 0,
     environment: 'earthquake',
     logs: [],
-    dataCollectionInterval: null
+    dataCollectionInterval: null,
+    inspectMode: false,
+    inspectTimeout: null
 };
 
 // ========================================
@@ -364,23 +465,33 @@ let cameraRotationY = 0;
 let ground = null;
 
 function createGround(env) {
-    if (ground) scene.remove(ground);
+    if (ground) {
+        scene.remove(ground);
+        // Also remove old grid helpers
+        scene.children.filter(child => child.type === 'GridHelper').forEach(grid => {
+            scene.remove(grid);
+        });
+    }
     
     const envConfig = ENVIRONMENTS[env];
     const groundSize = 200;
-    const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, 50, 50);
+    const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, 100, 100);
+    
+    // Create grass-like material
     const groundMaterial = new THREE.MeshStandardMaterial({ 
-        color: envConfig.groundColor,
-        roughness: 0.9,
-        metalness: 0.1
+        color: env === 'wildfire' ? envConfig.groundColor : 0x4a7c34, // Green grass for most environments
+        roughness: 0.95,
+        metalness: 0.05
     });
     
-    // Add terrain variation
+    // Add natural terrain variation
     const positions = groundGeometry.attributes.position;
     for (let i = 0; i < positions.count; i++) {
         const x = positions.getX(i);
         const z = positions.getZ(i);
-        const height = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 0.5;
+        // Create rolling hills effect
+        const height = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 0.8 + 
+                      Math.sin(x * 0.2) * Math.cos(z * 0.15) * 0.3;
         positions.setY(i, height);
     }
     groundGeometry.computeVertexNormals();
@@ -391,9 +502,7 @@ function createGround(env) {
     ground.position.y = 0;
     scene.add(ground);
     
-    const gridHelper = new THREE.GridHelper(groundSize, 50, 0x888888, 0x666666);
-    gridHelper.position.y = 0.02;
-    scene.add(gridHelper);
+    // NO GRID - just natural ground!
 }
 
 // ========================================
@@ -727,7 +836,16 @@ canvas.style.outline = 'none';
 canvas.style.cursor = 'crosshair';
 
 const handleKeyDown = (event) => {
-    if (!gameState.isGameStarted || gameState.isGameOver) return;
+    // ESC works even when paused
+    if (event.code === 'Escape') {
+        event.preventDefault();
+        if (gameState.isGameStarted && !gameState.isGameOver) {
+            togglePause();
+        }
+        return;
+    }
+    
+    if (!gameState.isGameStarted || gameState.isGameOver || gameState.isPaused) return;
     
     switch (event.code) {
         case 'KeyW':
@@ -757,6 +875,10 @@ const handleKeyDown = (event) => {
             break;
         case 'KeyR':
             refuel();
+            break;
+        case 'KeyE':
+            // Inspect - briefly reveal nearby victims
+            inspectVictims();
             break;
     }
 };
@@ -824,6 +946,66 @@ canvas.addEventListener('mousemove', (event) => {
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
 });
+
+// ========================================
+// PAUSE/RESUME
+// ========================================
+
+function togglePause() {
+    gameState.isPaused = !gameState.isPaused;
+    
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) {
+        if (gameState.isPaused) {
+            pauseMenu.classList.remove('hidden');
+            logPlayerAction('game_paused');
+        } else {
+            pauseMenu.classList.add('hidden');
+            logPlayerAction('game_resumed');
+        }
+    }
+}
+
+// ========================================
+// INSPECT VICTIMS
+// ========================================
+
+function inspectVictims() {
+    if (gameState.inspectMode) return; // Already inspecting
+    
+    gameState.inspectMode = true;
+    logPlayerAction('inspect_start');
+    
+    // Highlight nearby victims
+    victims.forEach(victim => {
+        if (victim.userData.saved) return;
+        
+        const distance = robotMesh.position.distanceTo(victim.position);
+        if (distance < 15) { // Within range
+            // Make victim glow
+            victim.material.emissive = new THREE.Color(0xffff00);
+            victim.material.emissiveIntensity = 0.8;
+            
+            // Add pulsing animation
+            victim.userData.inspectPulse = 0;
+        }
+    });
+    
+    // Clear inspect mode after 2 seconds
+    if (gameState.inspectTimeout) clearTimeout(gameState.inspectTimeout);
+    gameState.inspectTimeout = setTimeout(() => {
+        gameState.inspectMode = false;
+        
+        // Remove highlights
+        victims.forEach(victim => {
+            victim.material.emissive = new THREE.Color(0x000000);
+            victim.material.emissiveIntensity = 0;
+            delete victim.userData.inspectPulse;
+        });
+        
+        logPlayerAction('inspect_end');
+    }, 2000);
+}
 
 // ========================================
 // JUMPING
@@ -975,15 +1157,35 @@ function rescueVictim(victim) {
 
 function startVictimHealthDecay() {
     setInterval(() => {
-        if (!gameState.isGameStarted || gameState.isGameOver) return;
+        if (!gameState.isGameStarted || gameState.isGameOver || gameState.isPaused) return;
         
         victims.forEach(victim => {
-            if (!victim.userData.saved) {
+            if (!victim.userData.saved && !victim.userData.died) {
+                const prevHealth = victim.userData.health;
                 victim.userData.health = Math.max(0, victim.userData.health - victim.userData.decayRate);
                 
+                // Check if victim just died
+                if (prevHealth > 0 && victim.userData.health === 0) {
+                    victim.userData.died = true;
+                    gameState.victimsDied++;
+                    
+                    // Make victim gray to show death
+                    victim.material.color.setHex(0x444444);
+                    
+                    logPlayerAction('victim_died', {
+                        victimId: victims.indexOf(victim),
+                        cause: 'health_depletion'
+                    });
+                    
+                    // Check if game should end
+                    checkGameOver();
+                }
+                
                 // Visual indicator - change color based on health
-                const healthPercent = victim.userData.health / victim.userData.maxHealth;
-                victim.material.color.setHSL(0, 1, 0.3 + healthPercent * 0.3);
+                if (victim.userData.health > 0) {
+                    const healthPercent = victim.userData.health / victim.userData.maxHealth;
+                    victim.material.color.setHSL(0, 1, 0.3 + healthPercent * 0.3);
+                }
             }
         });
     }, 1000);
@@ -1038,11 +1240,28 @@ function checkZones() {
 // ========================================
 
 function checkCollisions() {
+    const robotRadius = 0.6; // Robot collision radius
+    let hasCollision = false;
+    let collisionNormal = new THREE.Vector3();
+    
     rubblePieces.forEach(piece => {
         if (piece.userData.destroyed) return;
         
         const distance = robotMesh.position.distanceTo(piece.position);
-        if (distance < 1) {
+        const pieceRadius = Math.max(piece.geometry.parameters.width, piece.geometry.parameters.depth) / 2;
+        const collisionDistance = robotRadius + pieceRadius;
+        
+        if (distance < collisionDistance) {
+            hasCollision = true;
+            
+            // Calculate push-back direction
+            const pushDirection = new THREE.Vector3()
+                .subVectors(robotMesh.position, piece.position)
+                .normalize();
+            
+            collisionNormal.add(pushDirection);
+            
+            // Apply damage on high-speed collision
             const speed = velocity.length();
             if (speed > 0.1 && robotState.damageCooldown <= 0) {
                 const damage = Math.min(10, speed * 5);
@@ -1056,6 +1275,78 @@ function checkCollisions() {
             }
         }
     });
+    
+    // Apply push-back force to prevent walking through rubble
+    if (hasCollision) {
+        collisionNormal.normalize();
+        const pushForce = 0.3;
+        robotMesh.position.add(collisionNormal.multiplyScalar(pushForce));
+        
+        // Reduce velocity in collision direction
+        const velocityDir = velocity.clone().normalize();
+        const dot = velocityDir.dot(collisionNormal);
+        if (dot < 0) {
+            velocity.sub(collisionNormal.multiplyScalar(dot * velocity.length() * 0.5));
+        }
+    }
+    
+    return hasCollision;
+}
+
+// ========================================
+// RUBBLE GRAVITY PHYSICS
+// ========================================
+
+function applyRubbleGravity() {
+    rubblePieces.forEach(piece => {
+        if (piece.userData.destroyed || piece.userData.isGrounded) return;
+        
+        // Check if piece has support below it
+        const hasSupport = checkRubbleSupport(piece);
+        
+        if (!hasSupport && piece.position.y > 0.5) {
+            // Apply gravity
+            if (!piece.userData.fallingVelocity) {
+                piece.userData.fallingVelocity = 0;
+            }
+            
+            piece.userData.fallingVelocity -= 0.5; // Gravity
+            piece.position.y += piece.userData.fallingVelocity * 0.016; // Delta time approximation
+            
+            // Ground collision
+            if (piece.position.y <= 0.5) {
+                piece.position.y = 0.5;
+                piece.userData.fallingVelocity = 0;
+                piece.userData.isGrounded = true;
+            }
+        } else if (piece.position.y <= 0.5) {
+            piece.userData.isGrounded = true;
+        }
+    });
+}
+
+function checkRubbleSupport(piece) {
+    // Check if there's rubble or ground below this piece
+    if (piece.position.y <= 0.6) return true; // On ground
+    
+    // Check for rubble below
+    for (let other of rubblePieces) {
+        if (other === piece || other.userData.destroyed) continue;
+        
+        const horizontalDist = Math.sqrt(
+            Math.pow(piece.position.x - other.position.x, 2) +
+            Math.pow(piece.position.z - other.position.z, 2)
+        );
+        
+        const verticalDist = piece.position.y - other.position.y;
+        
+        // If there's rubble below and close horizontally, it's supported
+        if (horizontalDist < 1.5 && verticalDist > 0 && verticalDist < 2) {
+            return true;
+        }
+    }
+    
+    return false; // No support found
 }
 
 // ========================================
@@ -1316,7 +1607,10 @@ function initGame(environment) {
 // ========================================
 
 function checkGameOver() {
-    if (gameState.victimsSaved >= gameState.victimsTotal || robotState.health <= 0) {
+    // Game ends when: all victims saved, all victims dead, or robot health reaches 0
+    const allAccountedFor = (gameState.victimsSaved + gameState.victimsDied) >= gameState.victimsTotal;
+    
+    if (allAccountedFor || robotState.health <= 0) {
         endGame();
     }
 }
@@ -1428,6 +1722,11 @@ function animate() {
     }
     
     if (gameState.isGameOver) {
+        renderer.render(scene, camera);
+        return;
+    }
+    
+    if (gameState.isPaused) {
         renderer.render(scene, camera);
         return;
     }
@@ -1551,6 +1850,17 @@ function animate() {
     
     checkCollisions();
     checkVictimAccessibility();
+    applyRubbleGravity(); // Apply gravity to unsupported rubble
+    
+    // Update inspect pulse animation
+    if (gameState.inspectMode) {
+        victims.forEach(victim => {
+            if (victim.userData.inspectPulse !== undefined) {
+                victim.userData.inspectPulse += delta * 5;
+                victim.material.emissiveIntensity = 0.5 + Math.sin(victim.userData.inspectPulse) * 0.3;
+            }
+        });
+    }
     
     prevTime = time;
     updateUI();
@@ -1608,9 +1918,13 @@ function updateHomepage() {
     }
 }
 
-// Update homepage every second
-setInterval(updateHomepage, 1000);
+// Update homepage every second and check for REACT TIME popup
+setInterval(() => {
+    updateHomepage();
+    challengeManager.showReactTimePopup();
+}, 1000);
 updateHomepage();
+notificationManager.updateBadge();
 
 document.getElementById('playNowBtn').addEventListener('click', () => {
     if (!userManager.currentUser) {
@@ -1759,9 +2073,110 @@ document.getElementById('backToMenuFromGame').addEventListener('click', () => {
     location.reload();
 });
 
+// Pause Menu
+document.getElementById('resumeBtn')?.addEventListener('click', () => {
+    togglePause();
+});
+
+document.getElementById('quitToMenuBtn')?.addEventListener('click', () => {
+    if (confirm('Are you sure you want to quit? Progress will be lost.')) {
+        location.reload();
+    }
+});
+
+// REACT TIME Popup
+document.getElementById('dismissReactPopup')?.addEventListener('click', () => {
+    document.getElementById('reactTimePopup').classList.add('hidden');
+});
+
+// Notifications
+document.getElementById('notificationsBtn')?.addEventListener('click', () => {
+    showNotifications();
+});
+
+document.getElementById('markAllReadBtn')?.addEventListener('click', () => {
+    notificationManager.markAllAsRead();
+    showNotifications();
+});
+
+document.getElementById('backFromNotifications')?.addEventListener('click', () => {
+    showScreen('homepage');
+});
+
+function showNotifications() {
+    const notifications = notificationManager.notifications;
+    const listElement = document.getElementById('notificationsList');
+    
+    if (notifications.length === 0) {
+        listElement.innerHTML = '<p style="text-align: center; color: rgba(255,255,255,0.5); padding: 40px;">No notifications yet</p>';
+    } else {
+        listElement.innerHTML = notifications.map(notif => {
+            const timeAgo = getTimeAgo(notif.timestamp);
+            return `
+                <div class="notificationItem ${notif.read ? '' : 'unread'}">
+                    <div class="notifTime">${timeAgo}</div>
+                    <div class="notifMessage">${notif.message}</div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    showScreen('notificationsScreen');
+}
+
+function getTimeAgo(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+}
+
+// Social Sharing
+document.getElementById('shareTwitterBtn')?.addEventListener('click', () => {
+    const text = generateShareText();
+    const url = encodeURIComponent(window.location.href);
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${url}`;
+    window.open(twitterUrl, '_blank');
+});
+
+document.getElementById('shareFacebookBtn')?.addEventListener('click', () => {
+    const url = encodeURIComponent(window.location.href);
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+    window.open(facebookUrl, '_blank');
+});
+
+document.getElementById('copyResultsBtn')?.addEventListener('click', () => {
+    const text = generateShareText();
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Results copied to clipboard!');
+    });
+});
+
+function generateShareText() {
+    const envName = ENVIRONMENTS[gameState.environment].name;
+    const minutes = Math.floor(gameState.elapsedTime / 60);
+    const seconds = gameState.elapsedTime % 60;
+    const timeStr = `${minutes}:${String(seconds).padStart(2, '0')}`;
+    
+    return `🚁 I just completed a ${envName} rescue mission in ReActure!
+    
+⏱️ Time: ${timeStr}
+✅ Victims Saved: ${gameState.victimsSaved}/${gameState.victimsTotal}
+🏆 Score: ${gameState.score}
+💚 Health: ${Math.round(robotState.health)}%
+
+Can you beat my REACT time? #ReActure #DisasterResponse`;
+}
+
 // Screen Navigation Helper
 function showScreen(screenId) {
-    const screens = ['homepage', 'authScreen', 'environmentScreen', 'leaderboardScreen', 'startScreen'];
+    const screens = ['homepage', 'authScreen', 'environmentScreen', 'leaderboardScreen', 'startScreen', 'notificationsScreen'];
     screens.forEach(id => {
         document.getElementById(id).classList.add('hidden');
     });
