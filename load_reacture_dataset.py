@@ -82,47 +82,29 @@ class ReActureDataset:
         return samples
     
     def _load_frames(self) -> np.ndarray:
-        """Load visual frames from PNG files."""
-        try:
-            from PIL import Image
-        except ImportError:
-            print("⚠️  PIL/Pillow not installed. Install with: pip install Pillow")
-            print("   Frames will not be loaded.")
+        """Load visual frames from NumPy .npy file."""
+        # Try loading consolidated frames.npy file
+        frames_path = self.base_path / f"{self.session_id}_frames.npy"
+        timestamps_path = self.base_path / f"{self.session_id}_timestamps.npy"
+        
+        if frames_path.exists():
+            print(f"📷 Loading frames from {frames_path.name}...")
+            frames_array = np.load(frames_path)
+            
+            # Load timestamps if available
+            if timestamps_path.exists():
+                self.frame_timestamps = np.load(timestamps_path)
+                print(f"⏱️  Loaded {len(self.frame_timestamps)} timestamps")
+            else:
+                # Generate timestamps (10 Hz = 100ms intervals)
+                self.frame_timestamps = np.arange(len(frames_array)) * 100.0
+                print(f"⏱️  Generated timestamps (10 Hz)")
+            
+            print(f"✅ Loaded frames with shape: {frames_array.shape}")
+            return frames_array
+        else:
+            warnings.warn(f"Frames file not found: {frames_path}")
             return None
-        
-        # Find all PNG frame files
-        frame_pattern = f"{self.session_id}_frame_*.png"
-        frame_files = sorted(list(self.base_path.glob(frame_pattern)))
-        
-        if not frame_files:
-            warnings.warn(f"No PNG frames found matching pattern: {frame_pattern}")
-            return None
-        
-        print(f"📷 Loading {len(frame_files)} PNG frames...")
-        
-        frames_list = []
-        for i, frame_path in enumerate(frame_files):
-            img = Image.open(frame_path)
-            frame = np.array(img)
-            
-            # Ensure RGB format (remove alpha if present)
-            if frame.shape[-1] == 4:
-                frame = frame[:, :, :3]
-            
-            frames_list.append(frame)
-            
-            # Progress indicator
-            if (i + 1) % 100 == 0 or i == len(frame_files) - 1:
-                print(f"   Loaded {i + 1}/{len(frame_files)} frames...")
-        
-        # Stack into single array
-        frames_array = np.stack(frames_list, axis=0)
-        
-        # Generate timestamps (10 Hz = 100ms intervals)
-        self.frame_timestamps = np.arange(len(frames_array)) * 100.0
-        
-        print(f"✅ Loaded frames with shape: {frames_array.shape}")
-        return frames_array
     
     def __len__(self) -> int:
         """Number of samples in dataset."""
