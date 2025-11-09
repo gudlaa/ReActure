@@ -1,90 +1,117 @@
-# 📊 NumPy Files - Dataset Export Guide
+# 📊 PNG Frames - Dataset Export Guide
 
-## ✅ **ACTUAL .NPY FILES NOW GENERATED!**
+## ✅ **PNG FILES GENERATED AT 10HZ!**
 
-ReActure now creates **real NumPy files** (.npy format) for visual frames, ready for ML training!
+ReActure now creates **PNG image files** for each visual frame at 10Hz, ready for ML training and easy visualization!
 
 ---
 
 ## 📁 **WHAT YOU GET**
 
-### **5 Files Downloaded:**
+### **Multiple Files Downloaded:**
 
 1. **`reacture_XXXXX_metadata.json`** - Session info
 2. **`reacture_XXXXX_data.jsonl`** - 10Hz time-series data
-3. **`reacture_XXXXX_frames.npy`** - All visual frames (NumPy array) ✨ NEW
-4. **`reacture_XXXXX_timestamps.npy`** - Frame timestamps (NumPy array) ✨ NEW
-5. **`reacture_XXXXX_README.md`** - Dataset documentation
+3. **`reacture_XXXXX_frame_000000.png`** - Frame at 0ms ✨
+4. **`reacture_XXXXX_frame_000001.png`** - Frame at 100ms ✨
+5. **`reacture_XXXXX_frame_000002.png`** - Frame at 200ms ✨
+6. **... (one PNG per 100ms)**
+7. **`reacture_XXXXX_README.md`** - Dataset documentation
+
+**For a 1-minute game:** 3 + ~600 PNG files = **~603 files total**  
+**For a 5-minute game:** 3 + ~3000 PNG files = **~3003 files total**
 
 ---
 
-## 🎨 **FRAMES.NPY FORMAT**
+## 🎨 **PNG FRAMES FORMAT**
 
-### **Consolidated NumPy File:**
+### **Individual PNG Files (10Hz):**
 
-**Why one file?**
-- ✅ Faster loading (single file read)
-- ✅ Memory-mappable
-- ✅ Better for batch processing
-- ✅ Simpler file management
-- ✅ Optimal for ML training
+**Why PNG files?**
+- ✅ Universally viewable (any image viewer)
+- ✅ Easy to inspect and debug
+- ✅ Lossless compression
+- ✅ Standard format
+- ✅ Works with all ML tools
+- ✅ Can create videos easily
 
 **File Structure:**
-- **Filename**: `reacture_XXXXX_frames.npy`
-- **Format**: NumPy .npy binary format
-- **Shape**: `(N, 128, 128, 3)`
-  - N = number of frames (~600 for 1-minute game at 10Hz)
-  - 128x128 = image resolution (downsampled for efficiency)
-  - 3 = RGB channels
-- **Dtype**: `uint8` (0-255)
-- **Size**: ~5-50 MB depending on duration
+- **Filename Pattern**: `reacture_XXXXX_frame_YYYYYY.png`
+  - XXXXX = session timestamp
+  - YYYYYY = frame number (000000, 000001, 000002, ...)
+- **Format**: PNG (lossless)
+- **Resolution**: 128x128 pixels
+- **Channels**: RGB (3 channels)
+- **Bit depth**: 8-bit per channel (0-255)
+- **Frequency**: 10 Hz (one frame every 100ms)
+- **Size**: ~5-15 KB per PNG
+
+**Naming Examples:**
+- `reacture_1731177600000_frame_000000.png` - t=0ms
+- `reacture_1731177600000_frame_000001.png` - t=100ms
+- `reacture_1731177600000_frame_000010.png` - t=1000ms (1 second)
+- `reacture_1731177600000_frame_000600.png` - t=60000ms (1 minute)
 
 ---
 
-## ⏱️ **TIMESTAMPS.NPY FORMAT**
+## ⏱️ **TIMESTAMP SYNCHRONIZATION**
 
-### **Frame Timing Data:**
+### **How Frame Timing Works:**
 
-**File Structure:**
-- **Filename**: `reacture_XXXXX_timestamps.npy`
-- **Format**: NumPy .npy binary format
-- **Shape**: `(N,)`
-- **Dtype**: `float32`
-- **Units**: Milliseconds since game start
-- **Synchronized**: `frames[i]` corresponds to `timestamps[i]`
-
-**Example:**
-```python
-timestamps = np.load('timestamps.npy')
-# [100.0, 200.0, 300.0, 400.0, ...]  # 10 Hz = 100ms intervals
+**Timestamp Calculation:**
 ```
+Frame Index × 100ms = Timestamp
+
+Examples:
+- frame_000000.png → 0ms (game start)
+- frame_000001.png → 100ms
+- frame_000010.png → 1000ms (1 second)
+- frame_000100.png → 10000ms (10 seconds)
+- frame_000600.png → 60000ms (1 minute)
+```
+
+**Synchronized with JSONL:**
+- Each JSONL sample has `timestamp_ms` field
+- Match frame index to JSONL sample index
+- Perfect 10Hz alignment across all data
 
 ---
 
 ## 🐍 **LOADING IN PYTHON**
 
-### **Direct NumPy Loading:**
+### **Loading PNG Frames:**
 
 ```python
 import numpy as np
+from PIL import Image
+import glob
 
-# Load all frames at once
-frames = np.load('reacture_1731177600000_frames.npy')
-print(frames.shape)  # (600, 128, 128, 3) for 1-minute game
+# Load all PNG frames
+frame_files = sorted(glob.glob('reacture_1731177600000_frame_*.png'))
+print(f"Found {len(frame_files)} frames")
 
-# Load timestamps
-timestamps = np.load('reacture_1731177600000_timestamps.npy')
-print(timestamps.shape)  # (600,)
+# Load into NumPy array
+frames = []
+for frame_file in frame_files:
+    img = Image.open(frame_file)
+    frame = np.array(img)  # (128, 128, 3) RGB
+    frames.append(frame)
+
+frames = np.stack(frames, axis=0)  # (N, 128, 128, 3)
+print(f"Loaded frames with shape: {frames.shape}")
+
+# Calculate timestamps (10 Hz)
+timestamps = np.arange(len(frames)) * 100  # Milliseconds
 
 # Access specific frame
 frame_10 = frames[10]  # Frame at index 10
-time_10 = timestamps[10]  # Timestamp for that frame
+time_10 = timestamps[10]  # 1000ms
 print(f"Frame {10} at {time_10}ms: {frame_10.shape}")
 
 # Visualize a frame
 import matplotlib.pyplot as plt
 plt.imshow(frames[0])
-plt.title(f'First Frame (t={timestamps[0]}ms)')
+plt.title('First Frame (t=0ms)')
 plt.show()
 ```
 

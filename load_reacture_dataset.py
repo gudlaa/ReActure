@@ -82,50 +82,47 @@ class ReActureDataset:
         return samples
     
     def _load_frames(self) -> np.ndarray:
-        """Load visual frames from .npy file."""
-        # Try loading frames.npy (new format)
-        frames_npy_path = self.base_path / f"{self.session_id}_frames.npy"
-        timestamps_npy_path = self.base_path / f"{self.session_id}_timestamps.npy"
+        """Load visual frames from PNG files."""
+        try:
+            from PIL import Image
+        except ImportError:
+            print("⚠️  PIL/Pillow not installed. Install with: pip install Pillow")
+            print("   Frames will not be loaded.")
+            return None
         
-        if frames_npy_path.exists():
-            print(f"📷 Loading frames from {frames_npy_path.name}")
-            frames_array = np.load(frames_npy_path)
-            
-            # Load timestamps if available
-            if timestamps_npy_path.exists():
-                self.frame_timestamps = np.load(timestamps_npy_path)
-                print(f"⏱️  Loaded {len(self.frame_timestamps)} timestamps")
-            else:
-                # Generate timestamps from sample count if not available
-                self.frame_timestamps = np.arange(len(frames_array)) * 100  # 10 Hz = 100ms
-            
-            print(f"✅ Loaded frames with shape: {frames_array.shape}")
-            return frames_array
+        # Find all PNG frame files
+        frame_pattern = f"{self.session_id}_frame_*.png"
+        frame_files = sorted(list(self.base_path.glob(frame_pattern)))
         
-        # Fallback: try old frames.json format
-        frames_json_path = self.base_path / f"{self.session_id}_frames.json"
-        if frames_json_path.exists():
-            print(f"📷 Loading frames from {frames_json_path.name} (legacy format)")
-            warnings.warn("Using legacy JSON frames format. Consider re-exporting dataset.")
-            
-            with open(frames_json_path, 'r') as f:
-                frames_manifest = json.load(f)
-            
-            frames_list = []
-            for frame_info in frames_manifest:
-                # Decode base64 to NumPy array
-                data_bytes = base64.b64decode(frame_info['data_base64'])
-                data = np.frombuffer(data_bytes, dtype=np.uint8)
-                
-                # Reshape to image
-                h, w, c = frame_info['shape']
-                image = data.reshape((h, w, c))
-                frames_list.append(image)
-            
-            return np.stack(frames_list, axis=0) if frames_list else None
+        if not frame_files:
+            warnings.warn(f"No PNG frames found matching pattern: {frame_pattern}")
+            return None
         
-        warnings.warn("No frames file found")
-        return None
+        print(f"📷 Loading {len(frame_files)} PNG frames...")
+        
+        frames_list = []
+        for i, frame_path in enumerate(frame_files):
+            img = Image.open(frame_path)
+            frame = np.array(img)
+            
+            # Ensure RGB format (remove alpha if present)
+            if frame.shape[-1] == 4:
+                frame = frame[:, :, :3]
+            
+            frames_list.append(frame)
+            
+            # Progress indicator
+            if (i + 1) % 100 == 0 or i == len(frame_files) - 1:
+                print(f"   Loaded {i + 1}/{len(frame_files)} frames...")
+        
+        # Stack into single array
+        frames_array = np.stack(frames_list, axis=0)
+        
+        # Generate timestamps (10 Hz = 100ms intervals)
+        self.frame_timestamps = np.arange(len(frames_array)) * 100.0
+        
+        print(f"✅ Loaded frames with shape: {frames_array.shape}")
+        return frames_array
     
     def __len__(self) -> int:
         """Number of samples in dataset."""
