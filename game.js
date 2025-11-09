@@ -917,6 +917,11 @@ const handleKeyDown = (event) => {
             // Inspect - briefly reveal nearby victims
             inspectVictims();
             break;
+        case 'KeyF':
+            console.log('✅ F pressed - Rescue attempt');
+            // Manual rescue
+            attemptRescue();
+            break;
     }
 };
 
@@ -969,10 +974,17 @@ canvas.addEventListener('mouseup', () => {
 // Pointer lock for FPS controls
 canvas.addEventListener('click', () => {
     if (gameState.isGameStarted && !gameState.isGameOver && !gameState.isPaused) {
-        canvas.requestPointerLock = canvas.requestPointerLock || 
-                                    canvas.mozRequestPointerLock || 
-                                    canvas.webkitRequestPointerLock;
-        canvas.requestPointerLock();
+        // If pointer is already locked, treat click as rescue attempt
+        if (document.pointerLockElement === canvas) {
+            console.log('🖱️ Mouse clicked - Attempting rescue');
+            attemptRescue();
+        } else {
+            // Otherwise, request pointer lock
+            canvas.requestPointerLock = canvas.requestPointerLock || 
+                                        canvas.mozRequestPointerLock || 
+                                        canvas.webkitRequestPointerLock;
+            canvas.requestPointerLock();
+        }
     }
 });
 
@@ -1201,8 +1213,9 @@ function refuel() {
 // ========================================
 
 function checkVictimAccessibility() {
+    // Just check which victims are accessible (for UI feedback)
     victims.forEach(victim => {
-        if (victim.userData.saved) return;
+        if (victim.userData.saved || victim.userData.died) return;
         
         // Check if rubble above victim is cleared
         const rubbleAbove = rubblePieces.filter(p => 
@@ -1210,16 +1223,51 @@ function checkVictimAccessibility() {
             p.userData.pileId === victim.userData.pileId
         );
         
-        const clearedPercent = 1 - (rubbleAbove.length / rubblePieces.filter(p => p.userData.pileId === victim.userData.pileId).length);
+        const totalRubble = rubblePieces.filter(p => p.userData.pileId === victim.userData.pileId).length;
+        const clearedPercent = totalRubble > 0 ? 1 - (rubbleAbove.length / totalRubble) : 1;
         
-        // Need at least 70% rubble cleared
-        if (clearedPercent > 0.7) {
-            const distance = robotMesh.position.distanceTo(victim.position);
-            if (distance < 2.5) {
-                rescueVictim(victim);
+        const distance = robotMesh.position.distanceTo(victim.position);
+        
+        // Mark as accessible if cleared enough and close
+        victim.userData.accessible = clearedPercent > 0.7 && distance < 3;
+        
+        // Visual feedback - pulse if accessible
+        if (victim.userData.accessible) {
+            victim.material.emissive = new THREE.Color(0x00ff00);
+            victim.material.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.005) * 0.2;
+        } else if (!victim.userData.died) {
+            victim.material.emissive = new THREE.Color(0x000000);
+            victim.material.emissiveIntensity = 0;
+        }
+    });
+}
+
+// Manual rescue function - called when player presses F or clicks
+function attemptRescue() {
+    console.log('🆘 Attempting rescue...');
+    
+    // Find closest accessible victim
+    let closestVictim = null;
+    let closestDistance = Infinity;
+    
+    victims.forEach(victim => {
+        if (victim.userData.saved || victim.userData.died) return;
+        
+        const distance = robotMesh.position.distanceTo(victim.position);
+        if (distance < 3 && victim.userData.accessible) {
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestVictim = victim;
             }
         }
     });
+    
+    if (closestVictim) {
+        rescueVictim(closestVictim);
+        console.log('✅ Victim rescued!');
+    } else {
+        console.log('❌ No accessible victim nearby. Clear more rubble!');
+    }
 }
 
 function rescueVictim(victim) {
