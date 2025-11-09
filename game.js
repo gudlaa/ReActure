@@ -407,7 +407,7 @@ scene.background = new THREE.Color(0x4a90e2);
 scene.fog = new THREE.Fog(0x87CEEB, 50, 150);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const cameraOffset = new THREE.Vector3(0, 5, 8);
+// First-person camera - no offset needed
 
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -450,13 +450,12 @@ const direction = new THREE.Vector3();
 const gravity = -20; // Gravity constant
 const robotHeight = 1.0;
 
-// Camera controls
+// Camera controls - First Person
 let mouseX = 0;
 let mouseY = 0;
-let targetCameraRotationX = 0;
-let targetCameraRotationY = 0;
-let cameraRotationX = 0;
-let cameraRotationY = 0;
+let cameraYaw = 0; // Horizontal rotation
+let cameraPitch = 0; // Vertical rotation
+const mouseSensitivity = 0.002;
 
 // ========================================
 // GROUND
@@ -474,34 +473,34 @@ function createGround(env) {
     }
     
     const envConfig = ENVIRONMENTS[env];
-    const groundSize = 200;
+const groundSize = 200;
     const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, 100, 100);
     
     // Create grass-like material
-    const groundMaterial = new THREE.MeshStandardMaterial({ 
+const groundMaterial = new THREE.MeshStandardMaterial({ 
         color: env === 'wildfire' ? envConfig.groundColor : 0x4a7c34, // Green grass for most environments
         roughness: 0.95,
         metalness: 0.05
     });
     
     // Add natural terrain variation
-    const positions = groundGeometry.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-        const x = positions.getX(i);
-        const z = positions.getZ(i);
+const positions = groundGeometry.attributes.position;
+for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const z = positions.getZ(i);
         // Create rolling hills effect
         const height = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 0.8 + 
                       Math.sin(x * 0.2) * Math.cos(z * 0.15) * 0.3;
-        positions.setY(i, height);
-    }
-    groundGeometry.computeVertexNormals();
-    
+    positions.setY(i, height);
+}
+groundGeometry.computeVertexNormals();
+
     ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    ground.position.y = 0;
-    scene.add(ground);
-    
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+ground.position.y = 0;
+scene.add(ground);
+
     // NO GRID - just natural ground!
 }
 
@@ -637,6 +636,7 @@ function createRobot() {
 }
 
 const robotMesh = createRobot();
+robotMesh.visible = false; // Hide robot in first-person view
 scene.add(robotMesh);
 
 // ========================================
@@ -665,7 +665,7 @@ function generateRandomMap(env) {
     
     const envConfig = ENVIRONMENTS[env];
     
-    // Create rubble piles with victims
+    // Create rubble piles with victims - Earthquake style (horizontal spread)
     const numPiles = 7 + Math.floor(Math.random() * 5); // 7-11 piles
     gameState.victimsTotal = 0;
     
@@ -674,26 +674,40 @@ function generateRandomMap(env) {
         const pileZ = (Math.random() - 0.5) * 60;
         const pileY = 0;
         
-        const numPieces = 15 + Math.floor(Math.random() * 20); // 15-34 pieces
+        // Earthquake-style: more pieces, spread horizontally
+        const numPieces = 12 + Math.floor(Math.random() * 15); // 12-26 pieces
+        const spreadRadius = 5 + Math.random() * 3; // Wider horizontal spread (5-8m)
         
         for (let j = 0; j < numPieces; j++) {
-            const size = 0.5 + Math.random() * 1.5;
-            const geometry = new THREE.BoxGeometry(size, size, size);
+            // Create more rectangular, flat pieces (collapsed building debris)
+            const width = 1 + Math.random() * 2.5;
+            const height = 0.3 + Math.random() * 0.8; // Flatter pieces (0.3-1.1m)
+            const depth = 1 + Math.random() * 2.5;
+            
+            const geometry = new THREE.BoxGeometry(width, height, depth);
             const material = new THREE.MeshStandardMaterial({ 
                 color: new THREE.Color(envConfig.rubbleColor).offsetHSL(0, 0, Math.random() * 0.1 - 0.05)
             });
             const piece = new THREE.Mesh(geometry, material);
             
+            // Horizontal earthquake spread pattern (circular distribution)
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * spreadRadius;
+            const layer = Math.floor(j / 6); // Loose layers, max 3-4 layers
+            
             piece.position.set(
-                pileX + (Math.random() - 0.5) * 4,
-                pileY + j * 0.25,
-                pileZ + (Math.random() - 0.5) * 4
+                pileX + Math.cos(angle) * distance,
+                pileY + layer * 0.5 + Math.random() * 0.3, // Much lower stacking (0-2m max)
+                pileZ + Math.sin(angle) * distance
             );
+            
+            // Rotations simulate fallen/collapsed state
             piece.rotation.set(
-                Math.random() * Math.PI,
-                Math.random() * Math.PI,
-                Math.random() * Math.PI
+                (Math.random() - 0.5) * Math.PI * 0.4, // Slight X tilt
+                Math.random() * Math.PI * 2, // Random Y rotation
+                (Math.random() - 0.5) * Math.PI * 0.3 // Slight Z tilt
             );
+            
             piece.castShadow = true;
             piece.receiveShadow = true;
             piece.userData = { 
@@ -767,21 +781,32 @@ function createVictim(x, z, pileId) {
 
 function createZone(x, z, radius, type, env) {
     const envConfig = ENVIRONMENTS[env];
-    const geometry = new THREE.CylinderGeometry(radius, radius, 0.1, 32);
     
-    let color = type === 'yellow' ? 0xffeb3b : envConfig.hazardColor;
+    // Flat circle on ground plane
+    const geometry = new THREE.CircleGeometry(radius, 32);
+    
+    // Color based on zone type
+    let color;
+    if (type === 'yellow') {
+        color = 0xffeb3b; // Yellow
+    } else if (type === 'red') {
+        color = envConfig.hazardColor; // Environment-specific danger color
+    } else {
+        color = 0x4CAF50; // Green for safe (if ever used)
+    }
     
     const material = new THREE.MeshStandardMaterial({ 
         color: color,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.4,
         emissive: color,
-        emissiveIntensity: type === 'red' ? 0.3 : 0.1
+        emissiveIntensity: type === 'red' ? 0.5 : 0.2,
+        side: THREE.DoubleSide
     });
     
     const zone = new THREE.Mesh(geometry, material);
-    zone.position.set(x, 0.05, z);
-    zone.rotation.x = Math.PI / 2;
+    zone.position.set(x, 0.02, z); // Flat on ground, slightly raised to prevent z-fighting
+    zone.rotation.x = -Math.PI / 2; // Lay flat on ground
     
     zone.userData = {
         type: type,
@@ -849,20 +874,20 @@ const handleKeyDown = (event) => {
     
     switch (event.code) {
         case 'KeyW':
-            moveForward = true;
-            logPlayerAction('move_forward_start');
+                moveForward = true;
+                    logPlayerAction('move_forward_start');
             break;
         case 'KeyA':
-            moveLeft = true;
-            logPlayerAction('move_left_start');
+                moveLeft = true;
+                    logPlayerAction('move_left_start');
             break;
         case 'KeyS':
-            moveBackward = true;
-            logPlayerAction('move_backward_start');
+                moveBackward = true;
+                    logPlayerAction('move_backward_start');
             break;
         case 'KeyD':
-            moveRight = true;
-            logPlayerAction('move_right_start');
+                moveRight = true;
+                    logPlayerAction('move_right_start');
             break;
         case 'Space':
             event.preventDefault();
@@ -874,7 +899,7 @@ const handleKeyDown = (event) => {
             }
             break;
         case 'KeyR':
-            refuel();
+                refuel();
             break;
         case 'KeyE':
             // Inspect - briefly reveal nearby victims
@@ -888,20 +913,20 @@ const handleKeyUp = (event) => {
     
     switch (event.code) {
         case 'KeyW':
-            moveForward = false;
-            logPlayerAction('move_forward_stop');
+                moveForward = false;
+                    logPlayerAction('move_forward_stop');
             break;
         case 'KeyA':
-            moveLeft = false;
-            logPlayerAction('move_left_stop');
+                moveLeft = false;
+                    logPlayerAction('move_left_stop');
             break;
         case 'KeyS':
-            moveBackward = false;
-            logPlayerAction('move_backward_stop');
+                moveBackward = false;
+                    logPlayerAction('move_backward_stop');
             break;
         case 'KeyD':
-            moveRight = false;
-            logPlayerAction('move_right_stop');
+                moveRight = false;
+                    logPlayerAction('move_right_stop');
             break;
     }
 };
@@ -930,18 +955,17 @@ canvas.addEventListener('mouseup', () => {
 });
 
 canvas.addEventListener('mousemove', (event) => {
-    const rotationSensitivity = 0.003;
-    const cameraSensitivity = 0.005;
+    if (!gameState.isGameStarted || gameState.isGameOver || gameState.isPaused) return;
     
     const deltaX = event.movementX !== undefined ? event.movementX : (event.clientX - lastMouseX);
     const deltaY = event.movementY !== undefined ? event.movementY : (event.clientY - lastMouseY);
     
-    // Rotate camera
-    targetCameraRotationY -= deltaX * cameraSensitivity;
-    targetCameraRotationX -= deltaY * cameraSensitivity;
+    // First-person camera rotation
+    cameraYaw -= deltaX * mouseSensitivity;
+    cameraPitch -= deltaY * mouseSensitivity;
     
-    // Limit vertical camera rotation
-    targetCameraRotationX = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, targetCameraRotationX));
+    // Limit vertical look (prevent flipping)
+    cameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraPitch));
     
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
@@ -959,7 +983,7 @@ function togglePause() {
         if (gameState.isPaused) {
             pauseMenu.classList.remove('hidden');
             logPlayerAction('game_paused');
-        } else {
+    } else {
             pauseMenu.classList.add('hidden');
             logPlayerAction('game_resumed');
         }
@@ -976,35 +1000,74 @@ function inspectVictims() {
     gameState.inspectMode = true;
     logPlayerAction('inspect_start');
     
-    // Highlight nearby victims
+    // Infrared camera - raycast forward to detect what's in front
+    const raycaster = new THREE.Raycaster();
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    
+    raycaster.set(camera.position, cameraDirection);
+    raycaster.far = 20; // 20m range
+    
+    // Check for victims in front
+    const victimMeshes = victims.filter(v => !v.userData.saved && !v.userData.died);
+    const intersects = raycaster.intersectObjects(victimMeshes);
+    
+    // Also detect nearby victims within cone of vision
     victims.forEach(victim => {
-        if (victim.userData.saved) return;
+        if (victim.userData.saved || victim.userData.died) return;
         
-        const distance = robotMesh.position.distanceTo(victim.position);
-        if (distance < 15) { // Within range
-            // Make victim glow
-            victim.material.emissive = new THREE.Color(0xffff00);
-            victim.material.emissiveIntensity = 0.8;
+        const toVictim = new THREE.Vector3().subVectors(victim.position, camera.position);
+        const distance = toVictim.length();
+        
+        if (distance < 20) { // Within 20m
+            toVictim.normalize();
+            const angle = cameraDirection.angleTo(toVictim);
             
-            // Add pulsing animation
-            victim.userData.inspectPulse = 0;
+            // Within 60-degree cone in front of camera
+            if (angle < Math.PI / 3) {
+                // Infrared glow effect - red/orange heat signature
+                victim.material.emissive = new THREE.Color(0xff4400);
+                victim.material.emissiveIntensity = 1.0;
+                victim.userData.inspectPulse = 0;
+                
+                // Make slightly visible through obstacles
+                victim.material.opacity = 1.0;
+            }
         }
     });
     
-    // Clear inspect mode after 2 seconds
+    // Show rubble in front too (infrared sees solid objects)
+    const rubbleMeshes = rubblePieces.filter(p => !p.userData.destroyed);
+    const rubbleIntersects = raycaster.intersectObjects(rubbleMeshes);
+    rubbleIntersects.slice(0, 5).forEach(intersect => {
+        intersect.object.material.emissive = new THREE.Color(0x4444ff);
+        intersect.object.material.emissiveIntensity = 0.3;
+        intersect.object.userData.inspectGlow = true;
+    });
+    
+    // Clear inspect mode after 2.5 seconds
     if (gameState.inspectTimeout) clearTimeout(gameState.inspectTimeout);
     gameState.inspectTimeout = setTimeout(() => {
         gameState.inspectMode = false;
         
-        // Remove highlights
+        // Remove all highlights
         victims.forEach(victim => {
             victim.material.emissive = new THREE.Color(0x000000);
             victim.material.emissiveIntensity = 0;
+            victim.material.opacity = 1.0;
             delete victim.userData.inspectPulse;
         });
         
+        rubblePieces.forEach(piece => {
+            if (piece.userData.inspectGlow) {
+                piece.material.emissive = new THREE.Color(0x000000);
+                piece.material.emissiveIntensity = 0;
+                delete piece.userData.inspectGlow;
+            }
+        });
+        
         logPlayerAction('inspect_end');
-    }, 2000);
+    }, 2500);
 }
 
 // ========================================
@@ -1025,15 +1088,16 @@ function jump() {
 
 function destroyRubble() {
     const raycaster = new THREE.Raycaster();
-    const robotHeadPosition = robotMesh.position.clone();
-    robotHeadPosition.y += 1.5;
-    const forwardDirection = new THREE.Vector3(0, 0, -1);
-    forwardDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), robotMesh.rotation.y);
-    raycaster.set(robotHeadPosition, forwardDirection);
+    
+    // First-person: raycast from camera position in camera direction
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    raycaster.set(camera.position, cameraDirection);
+    raycaster.far = 10; // 10m range for destruction
     
     const intersects = raycaster.intersectObjects(rubblePieces.filter(p => !p.userData.destroyed));
     
-    if (intersects.length > 0) {
+    if (intersects.length > 0 && intersects[0].distance < 5) { // Must be within 5m
         const piece = intersects[0].object;
         piece.userData.destroyed = true;
         
@@ -1061,7 +1125,8 @@ function destroyRubble() {
         
         logPlayerAction('destroy_rubble', {
             position: piece.position.clone(),
-            rubbleId: rubblePieces.indexOf(piece)
+            rubbleId: rubblePieces.indexOf(piece),
+            distance: intersects[0].distance
         });
         
         checkVictimAccessibility();
@@ -1429,11 +1494,11 @@ function logPlayerAction(action, data = {}) {
 
 function getSensorData() {
     const raycaster = new THREE.Raycaster();
-    const robotHeadPosition = robotMesh.position.clone();
-    robotHeadPosition.y += 1.5;
-    const forwardDirection = new THREE.Vector3(0, 0, -1);
-    forwardDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), robotMesh.rotation.y);
-    raycaster.set(robotHeadPosition, forwardDirection);
+    
+    // First-person: use camera position and direction
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    raycaster.set(camera.position, cameraDirection);
     
     const frontIntersects = raycaster.intersectObjects(
         [...rubblePieces.filter(p => !p.userData.destroyed), ...victims.filter(v => !v.userData.saved)],
@@ -1452,8 +1517,9 @@ function getSensorData() {
     const proximitySensors = {};
     sensorDirections.forEach(sensor => {
         const direction = sensor.dir.clone();
-        direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), robotMesh.rotation.y);
-        raycaster.set(robotHeadPosition, direction);
+        // Rotate based on camera yaw (first-person)
+        direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
+        raycaster.set(camera.position, direction);
         const intersects = raycaster.intersectObjects(
             [...rubblePieces.filter(p => !p.userData.destroyed), ...victims.filter(v => !v.userData.saved)],
             true
@@ -1597,8 +1663,12 @@ function initGame(environment) {
     
     setTimeout(() => {
         canvas.focus();
-        camera.position.set(0, 5, 8);
-        camera.lookAt(robotMesh.position);
+        // First-person: camera at robot's eye level
+        camera.position.copy(robotMesh.position);
+        camera.position.y += 1.5; // Robot's eye height
+        camera.rotation.set(0, 0, 0);
+        cameraYaw = 0;
+        cameraPitch = 0;
     }, 500);
 }
 
@@ -1742,14 +1812,14 @@ function animate() {
     
     // Movement
     let moveSpeed = 10.0;
-    const zoneInfo = checkZones();
+        const zoneInfo = checkZones();
     if (zoneInfo.inYellowZone) moveSpeed *= 0.5;
     
     // Friction
     velocity.x *= 0.8;
     velocity.z *= 0.8;
     
-    // Calculate movement direction
+    // Calculate movement direction (relative to camera view - first person)
     const moveDirection = new THREE.Vector3();
     if (moveForward) moveDirection.z -= 1;
     if (moveBackward) moveDirection.z += 1;
@@ -1759,7 +1829,8 @@ function animate() {
     // Apply movement
     if (moveDirection.length() > 0) {
         moveDirection.normalize();
-        moveDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), robotMesh.rotation.y);
+        // Rotate based on camera yaw (first-person movement)
+        moveDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
         
         const speed = moveSpeed * 20;
         const prevVelocityX = velocity.x;
@@ -1776,19 +1847,14 @@ function animate() {
         robotState.acceleration.z = 0;
     }
     
-    // Robot rotation
-    let angleDiff = robotMovement.targetRotation - robotMovement.rotation;
-    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-    robotMovement.rotation += angleDiff * 0.2;
-    robotMesh.rotation.y = robotMovement.rotation;
+    // Robot rotation matches camera yaw (handled in camera update section)
     
     // Jumping
     if (robotState.isJumping) {
         robotState.jumpVelocity += gravity * delta;
         velocity.y = robotState.jumpVelocity;
     } else {
-        velocity.y += gravity * delta;
+    velocity.y += gravity * delta;
     }
     
     // Update position
@@ -1813,26 +1879,22 @@ function animate() {
         });
     }
     
-    // Update camera (third-person)
-    const cameraDistance = cameraOffset.z;
-    const cameraHeight = cameraOffset.y;
-    
-    const horizontalAngle = cameraRotationY;
-    const verticalAngle = cameraRotationX;
-    
-    const x = Math.sin(horizontalAngle) * Math.cos(verticalAngle) * cameraDistance;
-    const y = cameraHeight + Math.sin(verticalAngle) * cameraDistance * 0.5;
-    const z = Math.cos(horizontalAngle) * Math.cos(verticalAngle) * cameraDistance;
-    
+    // Update camera (FIRST-PERSON - robot's eye view)
+    const eyeHeight = 1.5; // Robot eye height
     camera.position.set(
-        robotMesh.position.x + x,
-        robotMesh.position.y + y,
-        robotMesh.position.z + z
+        robotMesh.position.x,
+        robotMesh.position.y + eyeHeight,
+        robotMesh.position.z
     );
     
-    const lookAtPosition = robotMesh.position.clone();
-    lookAtPosition.y += 1;
-    camera.lookAt(lookAtPosition);
+    // Apply first-person rotation based on mouse input
+    camera.rotation.order = 'YXZ'; // Yaw then pitch
+    camera.rotation.y = cameraYaw;
+    camera.rotation.x = cameraPitch;
+    camera.rotation.z = 0;
+    
+    // Update robot's body rotation to match camera yaw (robot faces where you look)
+    robotMesh.rotation.y = cameraYaw;
     
     // Fuel consumption
     if (moveForward || moveBackward || moveLeft || moveRight) {

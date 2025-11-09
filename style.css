@@ -250,6 +250,8 @@ body {
     z-index: 3000;
     pointer-events: auto;
     animation: fadeIn 0.5s ease-in;
+    overflow-y: scroll;
+    padding: 40px 20px;
 }
 
 #authScreen.hidden {
@@ -481,11 +483,11 @@ body {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     z-index: 3000;
     pointer-events: auto;
     animation: fadeIn 0.5s ease-in;
-    overflow-y: auto;
+    overflow-y: scroll;
     padding: 40px 20px;
 }
 
@@ -612,9 +614,9 @@ body {
 
 /* Start Screen */
 #startScreen {
-    position: relative;
+    position: fixed;
     width: 100%;
-    min-height: 100vh;
+    height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     display: flex;
     justify-content: center;
@@ -623,7 +625,7 @@ body {
     z-index: 2000;
     pointer-events: auto;
     animation: fadeIn 0.5s ease-in;
-    overflow-y: auto;
+    overflow-y: scroll;
 }
 
 #startScreen.hidden {
@@ -1322,9 +1324,9 @@ body {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     z-index: 3000;
-    overflow-y: auto;
+    overflow-y: scroll;
     padding: 40px 20px;
 }
 
