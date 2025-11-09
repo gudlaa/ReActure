@@ -1609,10 +1609,32 @@ function checkRubbleSupport(piece) {
 // ========================================
 
 function logRobotState(event, data = {}) {
+    const currentTime = Date.now() - gameState.startTime;
+    
+    // Enhanced log entry with all required ML fields
     const logEntry = {
-        timestamp: Date.now() - gameState.startTime,
+        timestamp: new Date(gameState.startTime + currentTime).toISOString(),
+        timestamp_ms: currentTime,
+        time_elapsed_s: currentTime / 1000,
         type: 'robot_state',
         event: event,
+        
+        // Key presses (current state)
+        key_presses: {
+            W: moveForward,
+            A: moveLeft,
+            S: moveBackward,
+            D: moveRight,
+            Space: false, // Momentary, captured in action logs
+            E: gameState.inspectMode,
+            R: false, // Momentary
+            mouse_dx: mouseX,
+            mouse_dy: mouseY,
+            inspect: gameState.inspectMode,
+            destroy: false // Captured in action logs
+        },
+        
+        // Robot state
         robot: {
             position: {
                 x: robotMesh.position.x,
@@ -1624,21 +1646,33 @@ function logRobotState(event, data = {}) {
                 y: robotMesh.rotation.y,
                 z: robotMesh.rotation.z
             },
-            health: robotState.health,
-            fuel: robotState.fuel,
-            zone: robotState.currentZone,
             velocity: {
                 x: velocity.x,
                 y: velocity.y,
                 z: velocity.z
             },
-            acceleration: {
-                x: robotState.acceleration.x,
-                y: robotState.acceleration.y,
-                z: robotState.acceleration.z
-            },
             isJumping: robotState.isJumping
         },
+        
+        // Accelerometer (simulated IMU)
+        accelerometer: {
+            x: robotState.acceleration.x,
+            y: robotState.acceleration.y || 0,
+            z: robotState.acceleration.z
+        },
+        
+        // Battery level
+        battery: robotState.fuel, // 0-100
+        
+        // Damage level (inverted health)
+        damage: (100 - robotState.health) / 100, // 0-1 scale
+        
+        // Health (additional)
+        health: robotState.health,
+        fuel: robotState.fuel,
+        zone: robotState.currentZone,
+        
+        // Camera (first-person view)
         camera: {
             position: {
                 x: camera.position.x,
@@ -1649,9 +1683,15 @@ function logRobotState(event, data = {}) {
                 x: camera.rotation.x,
                 y: camera.rotation.y,
                 z: camera.rotation.z
-            }
+            },
+            yaw: cameraYaw,
+            pitch: cameraPitch
         },
+        
+        // Sensors
         sensors: getSensorData(),
+        
+        // Additional data
         ...data
     };
     
@@ -1750,15 +1790,79 @@ function getSensorData() {
     };
 }
 
-// Start 10Hz data collection
+// ========================================
+// VISUAL FRAME CAPTURE SYSTEM
+// ========================================
+
+let frameCounter = 0;
+const visualFrames = []; // Store frame data
+
+function captureVisualFrame() {
+    // Capture canvas as ImageData
+    const width = renderer.domElement.width;
+    const height = renderer.domElement.height;
+    const pixels = new Uint8Array(width * height * 4);
+    
+    const gl = renderer.getContext();
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    
+    // Downsample for efficiency (optional: 128x128 or 256x256)
+    const downsampleWidth = 128;
+    const downsampleHeight = 128;
+    const downsampled = downsampleImage(pixels, width, height, downsampleWidth, downsampleHeight);
+    
+    const framePath = `frames/frame_${String(frameCounter).padStart(6, '0')}.npy`;
+    frameCounter++;
+    
+    // Store frame reference and data for export
+    visualFrames.push({
+        path: framePath,
+        data: downsampled,
+        width: downsampleWidth,
+        height: downsampleHeight,
+        timestamp: Date.now() - gameState.startTime
+    });
+    
+    return framePath;
+}
+
+function downsampleImage(pixels, srcW, srcH, dstW, dstH) {
+    const result = new Uint8Array(dstW * dstH * 3); // RGB only
+    const scaleX = srcW / dstW;
+    const scaleY = srcH / dstH;
+    
+    for (let y = 0; y < dstH; y++) {
+        for (let x = 0; x < dstW; x++) {
+            const srcX = Math.floor(x * scaleX);
+            const srcY = Math.floor(y * scaleY);
+            const srcIdx = (srcY * srcW + srcX) * 4;
+            const dstIdx = (y * dstW + x) * 3;
+            
+            result[dstIdx] = pixels[srcIdx];     // R
+            result[dstIdx + 1] = pixels[srcIdx + 1]; // G
+            result[dstIdx + 2] = pixels[srcIdx + 2]; // B
+        }
+    }
+    
+    return result;
+}
+
+// Start 10Hz data collection with enhanced fields
 function startDataCollection() {
     if (gameState.dataCollectionInterval) {
         clearInterval(gameState.dataCollectionInterval);
     }
     
+    frameCounter = 0;
+    visualFrames.length = 0;
+    
     gameState.dataCollectionInterval = setInterval(() => {
-        if (gameState.isGameStarted && !gameState.isGameOver) {
-            logRobotState('periodic_update_10hz');
+        if (gameState.isGameStarted && !gameState.isGameOver && !gameState.isPaused) {
+            // Capture visual frame
+            const framePath = captureVisualFrame();
+            
+            // Log enhanced robot state
+            logRobotState('periodic_update_10hz', { visual_frame_path: framePath });
         }
     }, 100); // 100ms = 10Hz
 }
@@ -2361,16 +2465,195 @@ document.getElementById('restartBtn').addEventListener('click', () => {
     location.reload();
 });
 
+// Generate session metadata
+function generateSessionMetadata() {
+    const sessionId = 'reacture_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const duration = (Date.now() - gameState.startTime) / 1000;
+    
+    return {
+        session_id: sessionId,
+        start_time: new Date(gameState.startTime).toISOString(),
+        end_time: new Date().toISOString(),
+        duration_s: duration,
+        sampling_rate_hz: 10,
+        player_id: userManager.currentUser ? userManager.currentUser.username : 'anonymous',
+        player_name: userManager.currentUser ? userManager.currentUser.displayName : 'Anonymous',
+        robot_model: 'ReActure_v1',
+        environment: gameState.environment,
+        environment_name: ENVIRONMENTS[gameState.environment].name,
+        game_result: {
+            victims_total: gameState.victimsTotal,
+            victims_saved: gameState.victimsSaved,
+            victims_died: gameState.victimsDied,
+            final_score: gameState.score,
+            final_health: robotState.health,
+            final_fuel: robotState.fuel,
+            completion_status: robotState.health > 0 ? 'success' : 'failed'
+        },
+        data_stats: {
+            total_samples: gameState.logs.length,
+            total_frames: visualFrames.length,
+            actions_logged: gameState.logs.filter(l => l.type === 'player_action').length
+        }
+    };
+}
+
+// Convert logs to JSONL format
+function generateJSONL() {
+    return gameState.logs.map(log => JSON.stringify(log)).join('\n');
+}
+
+// Generate NumPy-compatible frame data file (simplified JSON array format)
+function generateFramesManifest() {
+    return visualFrames.map(frame => ({
+        path: frame.path,
+        timestamp_ms: frame.timestamp,
+        width: frame.width,
+        height: frame.height,
+        shape: [frame.height, frame.width, 3],
+        dtype: 'uint8',
+        data_base64: arrayToBase64(frame.data)
+    }));
+}
+
+function arrayToBase64(array) {
+    let binary = '';
+    const bytes = new Uint8Array(array);
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+// Download complete dataset
 document.getElementById('downloadLogsBtn').addEventListener('click', () => {
-    const dataStr = JSON.stringify(gameState.logs, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
+    console.log('📥 Generating ML-ready dataset...');
+    
+    const sessionId = 'reacture_' + Date.now();
+    
+    // 1. Generate metadata
+    const metadata = generateSessionMetadata();
+    const metadataBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });
+    
+    // 2. Generate JSONL data
+    const jsonlData = generateJSONL();
+    const jsonlBlob = new Blob([jsonlData], { type: 'application/x-ndjson' });
+    
+    // 3. Generate frames manifest
+    const framesManifest = generateFramesManifest();
+    const framesBlob = new Blob([JSON.stringify(framesManifest, null, 2)], { type: 'application/json' });
+    
+    // 4. Download all files
+    downloadFile(metadataBlob, `${sessionId}_metadata.json`);
+    
+    setTimeout(() => {
+        downloadFile(jsonlBlob, `${sessionId}_data.jsonl`);
+    }, 100);
+    
+    setTimeout(() => {
+        downloadFile(framesBlob, `${sessionId}_frames.json`);
+    }, 200);
+    
+    // 5. Also create README for the dataset
+    const readme = generateDatasetReadme(metadata);
+    const readmeBlob = new Blob([readme], { type: 'text/markdown' });
+    
+    setTimeout(() => {
+        downloadFile(readmeBlob, `${sessionId}_README.md`);
+    }, 300);
+    
+    console.log('✅ Dataset exported!');
+    console.log('📊 Samples:', gameState.logs.length);
+    console.log('📷 Frames:', visualFrames.length);
+    console.log('⏱️ Duration:', (metadata.duration_s).toFixed(1) + 's');
+    
+    alert(`Dataset exported!\n\n${gameState.logs.length} samples\n${visualFrames.length} frames\n${metadata.duration_s.toFixed(1)}s duration\n\n4 files downloaded.`);
+});
+
+function downloadFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `reacture_data_${Date.now()}.json`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
-});
+}
+
+function generateDatasetReadme(metadata) {
+    return `# ReActure Dataset - ${metadata.session_id}
+
+## Session Information
+
+- **Session ID**: ${metadata.session_id}
+- **Start Time**: ${metadata.start_time}
+- **Duration**: ${metadata.duration_s.toFixed(2)}s
+- **Sampling Rate**: ${metadata.sampling_rate_hz} Hz
+- **Player**: ${metadata.player_name}
+- **Environment**: ${metadata.environment_name}
+
+## Game Results
+
+- **Victims Saved**: ${metadata.game_result.victims_saved}/${metadata.game_result.victims_total}
+- **Victims Died**: ${metadata.game_result.victims_died}
+- **Final Score**: ${metadata.game_result.final_score}
+- **Final Health**: ${metadata.game_result.final_health}%
+- **Final Fuel**: ${metadata.game_result.final_fuel}%
+- **Status**: ${metadata.game_result.completion_status}
+
+## Dataset Statistics
+
+- **Total Samples**: ${metadata.data_stats.total_samples}
+- **Visual Frames**: ${metadata.data_stats.total_frames}
+- **Player Actions**: ${metadata.data_stats.actions_logged}
+
+## Files Included
+
+1. **${metadata.session_id}_metadata.json** - Session metadata
+2. **${metadata.session_id}_data.jsonl** - Time-series data (JSONL format)
+3. **${metadata.session_id}_frames.json** - Visual frames with base64 data
+4. **${metadata.session_id}_README.md** - This file
+
+## Data Format
+
+### JSONL Data Structure
+
+Each line is a JSON object with 10Hz sampling:
+
+\`\`\`json
+{
+  "timestamp": "2025-11-09T...",
+  "timestamp_ms": 1234,
+  "time_elapsed_s": 1.234,
+  "key_presses": {
+    "W": true, "A": false, "S": false, "D": false,
+    "mouse_dx": 0, "mouse_dy": 0,
+    "inspect": false, "destroy": false
+  },
+  "accelerometer": {"x": 0.14, "y": 0.0, "z": 0.05},
+  "battery": 87.3,
+  "damage": 0.12,
+  "robot": { "position": {...}, "velocity": {...} },
+  "camera": { "position": {...}, "rotation": {...}, "yaw": ..., "pitch": ... },
+  "sensors": {...},
+  "visual_frame_path": "frames/frame_000123.npy"
+}
+\`\`\`
+
+### Frame Data
+
+Frames are 128x128 RGB images stored as base64-encoded arrays.
+Use the provided Python loader to convert to NumPy arrays.
+
+## Usage
+
+See the Python loader script (\`load_reacture_dataset.py\`) for examples.
+
+## Generated by
+
+ReActure v1.0 - Disaster Response Simulation  
+https://github.com/gudlaa/ReActure
+`;
+}
 
 document.getElementById('backToMenuFromGame').addEventListener('click', () => {
     location.reload();
