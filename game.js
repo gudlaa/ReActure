@@ -2525,9 +2525,9 @@ function arrayToBase64(array) {
     return btoa(binary);
 }
 
-// Download complete dataset
+// Download complete dataset with NumPy files
 document.getElementById('downloadLogsBtn').addEventListener('click', () => {
-    console.log('📥 Generating ML-ready dataset...');
+    console.log('📥 Generating ML-ready dataset with NumPy files...');
     
     const sessionId = 'reacture_' + Date.now();
     
@@ -2539,35 +2539,54 @@ document.getElementById('downloadLogsBtn').addEventListener('click', () => {
     const jsonlData = generateJSONL();
     const jsonlBlob = new Blob([jsonlData], { type: 'application/x-ndjson' });
     
-    // 3. Generate frames manifest
-    const framesManifest = generateFramesManifest();
-    const framesBlob = new Blob([JSON.stringify(framesManifest, null, 2)], { type: 'application/json' });
+    // 3. Create NumPy files for frames
+    console.log('🎨 Creating frames.npy with shape:', [visualFrames.length, 128, 128, 3]);
+    const framesNpy = NumpyWriter.createFramesNpy(visualFrames);
     
-    // 4. Download all files
+    // 4. Create timestamps.npy
+    const timestamps = visualFrames.map(f => f.timestamp);
+    console.log('⏱️ Creating timestamps.npy with', timestamps.length, 'timestamps');
+    const timestampsNpy = NumpyWriter.createTimestampsNpy(timestamps);
+    
+    // 5. Create README for the dataset
+    const readme = generateDatasetReadme(metadata);
+    const readmeBlob = new Blob([readme], { type: 'text/markdown' });
+    
+    // Download all files
+    console.log('📥 Downloading files...');
+    
     downloadFile(metadataBlob, `${sessionId}_metadata.json`);
     
     setTimeout(() => {
         downloadFile(jsonlBlob, `${sessionId}_data.jsonl`);
     }, 100);
     
-    setTimeout(() => {
-        downloadFile(framesBlob, `${sessionId}_frames.json`);
-    }, 200);
+    if (framesNpy) {
+        setTimeout(() => {
+            downloadFile(framesNpy, `${sessionId}_frames.npy`);
+            console.log('✅ Downloaded frames.npy');
+        }, 200);
+    }
     
-    // 5. Also create README for the dataset
-    const readme = generateDatasetReadme(metadata);
-    const readmeBlob = new Blob([readme], { type: 'text/markdown' });
+    if (timestampsNpy) {
+        setTimeout(() => {
+            downloadFile(timestampsNpy, `${sessionId}_timestamps.npy`);
+            console.log('✅ Downloaded timestamps.npy');
+        }, 300);
+    }
     
     setTimeout(() => {
         downloadFile(readmeBlob, `${sessionId}_README.md`);
-    }, 300);
+    }, 400);
     
     console.log('✅ Dataset exported!');
     console.log('📊 Samples:', gameState.logs.length);
     console.log('📷 Frames:', visualFrames.length);
     console.log('⏱️ Duration:', (metadata.duration_s).toFixed(1) + 's');
+    console.log('📦 Files:', framesNpy ? '5 files' : '3 files');
     
-    alert(`Dataset exported!\n\n${gameState.logs.length} samples\n${visualFrames.length} frames\n${metadata.duration_s.toFixed(1)}s duration\n\n4 files downloaded.`);
+    const filesCount = framesNpy ? 5 : 3;
+    alert(`Dataset exported!\n\n${gameState.logs.length} samples\n${visualFrames.length} frames\n${metadata.duration_s.toFixed(1)}s duration\n\n${filesCount} files downloaded:\n• metadata.json\n• data.jsonl\n• frames.npy (${visualFrames.length} frames)\n• timestamps.npy\n• README.md`);
 });
 
 function downloadFile(blob, filename) {
@@ -2580,6 +2599,9 @@ function downloadFile(blob, filename) {
 }
 
 function generateDatasetReadme(metadata) {
+    const numFrames = visualFrames.length;
+    const frameShape = numFrames > 0 ? `(${numFrames}, 128, 128, 3)` : 'N/A';
+    
     return `# ReActure Dataset - ${metadata.session_id}
 
 ## Session Information
@@ -2587,7 +2609,7 @@ function generateDatasetReadme(metadata) {
 - **Session ID**: ${metadata.session_id}
 - **Start Time**: ${metadata.start_time}
 - **Duration**: ${metadata.duration_s.toFixed(2)}s
-- **Sampling Rate**: ${metadata.sampling_rate_hz} Hz
+- **Sampling Rate**: ${metadata.sampling_rate_hz} Hz (every 0.1s)
 - **Player**: ${metadata.player_name}
 - **Environment**: ${metadata.environment_name}
 
@@ -2596,62 +2618,113 @@ function generateDatasetReadme(metadata) {
 - **Victims Saved**: ${metadata.game_result.victims_saved}/${metadata.game_result.victims_total}
 - **Victims Died**: ${metadata.game_result.victims_died}
 - **Final Score**: ${metadata.game_result.final_score}
-- **Final Health**: ${metadata.game_result.final_health}%
-- **Final Fuel**: ${metadata.game_result.final_fuel}%
+- **Final Health**: ${metadata.game_result.final_health.toFixed(1)}%
+- **Final Fuel**: ${metadata.game_result.final_fuel.toFixed(1)}%
 - **Status**: ${metadata.game_result.completion_status}
 
 ## Dataset Statistics
 
-- **Total Samples**: ${metadata.data_stats.total_samples}
+- **Total Samples**: ${metadata.data_stats.total_samples} (10 Hz)
 - **Visual Frames**: ${metadata.data_stats.total_frames}
 - **Player Actions**: ${metadata.data_stats.actions_logged}
+- **Frame Resolution**: 128x128 RGB
+- **Frame Array Shape**: ${frameShape}
 
 ## Files Included
 
-1. **${metadata.session_id}_metadata.json** - Session metadata
-2. **${metadata.session_id}_data.jsonl** - Time-series data (JSONL format)
-3. **${metadata.session_id}_frames.json** - Visual frames with base64 data
-4. **${metadata.session_id}_README.md** - This file
+1. **\`${metadata.session_id}_metadata.json\`** - Session metadata and statistics
+2. **\`${metadata.session_id}_data.jsonl\`** - Time-series data (one JSON per line, 10 Hz)
+3. **\`${metadata.session_id}_frames.npy\`** - All visual frames (NumPy array, shape: ${frameShape})
+4. **\`${metadata.session_id}_timestamps.npy\`** - Frame timestamps in ms (shape: (${numFrames},))
+5. **\`${metadata.session_id}_README.md\`** - This file
 
 ## Data Format
 
-### JSONL Data Structure
+### JSONL Data (10 Hz Sampling)
 
-Each line is a JSON object with 10Hz sampling:
+Each line is a complete JSON object sampled every 0.1 seconds:
 
 \`\`\`json
 {
-  "timestamp": "2025-11-09T...",
-  "timestamp_ms": 1234,
-  "time_elapsed_s": 1.234,
+  "timestamp": "2025-11-09T14:22:13.200Z",
+  "timestamp_ms": 200,
+  "time_elapsed_s": 0.2,
   "key_presses": {
     "W": true, "A": false, "S": false, "D": false,
-    "mouse_dx": 0, "mouse_dy": 0,
+    "mouse_dx": 3.2, "mouse_dy": -1.4,
     "inspect": false, "destroy": false
   },
   "accelerometer": {"x": 0.14, "y": 0.0, "z": 0.05},
   "battery": 87.3,
   "damage": 0.12,
-  "robot": { "position": {...}, "velocity": {...} },
-  "camera": { "position": {...}, "rotation": {...}, "yaw": ..., "pitch": ... },
-  "sensors": {...},
+  "robot": {"position": {"x": 0.45, "y": 1.5, "z": -0.23}, ...},
+  "camera": {"yaw": 0.15, "pitch": -0.05, ...},
+  "sensors": {"proximity": 5.2, "victimsDetected": 2, ...},
   "visual_frame_path": "frames/frame_000123.npy"
 }
 \`\`\`
 
-### Frame Data
+### NumPy Files
 
-Frames are 128x128 RGB images stored as base64-encoded arrays.
-Use the provided Python loader to convert to NumPy arrays.
+**frames.npy:**
+- Shape: \`${frameShape}\`
+- Dtype: \`uint8\`
+- Format: RGB (0-255)
+- Index: \`frames[i]\` = frame at timestamp \`timestamps[i]\`
+
+**timestamps.npy:**
+- Shape: \`(${numFrames},)\`
+- Dtype: \`float32\`
+- Units: Milliseconds since game start
+- Synchronized with frames array
+
+### Loading in Python
+
+\`\`\`python
+import numpy as np
+import json
+
+# Load frames (all at once)
+frames = np.load('${metadata.session_id}_frames.npy')
+print(frames.shape)  # ${frameShape}
+
+# Load timestamps
+timestamps = np.load('${metadata.session_id}_timestamps.npy')
+print(timestamps.shape)  # (${numFrames},)
+
+# Load JSONL data
+with open('${metadata.session_id}_data.jsonl', 'r') as f:
+    samples = [json.loads(line) for line in f]
+
+# Access synchronized data
+for i, sample in enumerate(samples):
+    if i < len(frames):
+        frame = frames[i]  # RGB image (128, 128, 3)
+        timestamp_ms = timestamps[i]
+        print(f"Sample {i}: time={timestamp_ms}ms, battery={sample['battery']}%")
+\`\`\`
+
+Or use the provided loader:
+
+\`\`\`python
+from load_reacture_dataset import ReActureDataset
+dataset = ReActureDataset('${metadata.session_id}_metadata.json')
+
+for sample in dataset:
+    frame = sample['frame']  # NumPy array (128, 128, 3)
+    battery = sample['battery']
+    damage = sample['damage']
+\`\`\`
 
 ## Usage
 
-See the Python loader script (\`load_reacture_dataset.py\`) for examples.
+See \`load_reacture_dataset.py\` for complete loader with PyTorch/TensorFlow integration.
 
 ## Generated by
 
 ReActure v1.0 - Disaster Response Simulation  
-https://github.com/gudlaa/ReActure
+https://github.com/gudlaa/ReActure  
+Generated: ${new Date().toISOString()}
 `;
 }
 

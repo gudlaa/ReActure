@@ -58,11 +58,13 @@ class ReActureDataset:
         # Load JSONL data
         self.samples = self._load_jsonl()
         
-        # Load frames
-        self.frames = self._load_frames()
+        # Load frames (NumPy array)
+        self.frames_array = self._load_frames()
+        self.frame_timestamps = getattr(self, 'frame_timestamps', None)
         
         print(f"✅ Loaded {len(self.samples)} samples")
-        print(f"✅ Loaded {len(self.frames)} frames")
+        if self.frames_array is not None:
+            print(f"✅ Loaded frames array with shape: {self.frames_array.shape}")
     
     def _load_jsonl(self) -> List[Dict]:
         """Load JSONL data file."""
@@ -79,30 +81,51 @@ class ReActureDataset:
         
         return samples
     
-    def _load_frames(self) -> Dict[str, np.ndarray]:
-        """Load all visual frames from frames manifest."""
-        frames_path = self.base_path / f"{self.session_id}_frames.json"
+    def _load_frames(self) -> np.ndarray:
+        """Load visual frames from .npy file."""
+        # Try loading frames.npy (new format)
+        frames_npy_path = self.base_path / f"{self.session_id}_frames.npy"
+        timestamps_npy_path = self.base_path / f"{self.session_id}_timestamps.npy"
         
-        if not frames_path.exists():
-            warnings.warn(f"Frames file not found: {frames_path}")
-            return {}
-        
-        with open(frames_path, 'r') as f:
-            frames_manifest = json.load(f)
-        
-        frames = {}
-        for frame_info in frames_manifest:
-            # Decode base64 to NumPy array
-            data_bytes = base64.b64decode(frame_info['data_base64'])
-            data = np.frombuffer(data_bytes, dtype=np.uint8)
+        if frames_npy_path.exists():
+            print(f"📷 Loading frames from {frames_npy_path.name}")
+            frames_array = np.load(frames_npy_path)
             
-            # Reshape to image
-            h, w, c = frame_info['shape']
-            image = data.reshape((h, w, c))
+            # Load timestamps if available
+            if timestamps_npy_path.exists():
+                self.frame_timestamps = np.load(timestamps_npy_path)
+                print(f"⏱️  Loaded {len(self.frame_timestamps)} timestamps")
+            else:
+                # Generate timestamps from sample count if not available
+                self.frame_timestamps = np.arange(len(frames_array)) * 100  # 10 Hz = 100ms
             
-            frames[frame_info['path']] = image
+            print(f"✅ Loaded frames with shape: {frames_array.shape}")
+            return frames_array
         
-        return frames
+        # Fallback: try old frames.json format
+        frames_json_path = self.base_path / f"{self.session_id}_frames.json"
+        if frames_json_path.exists():
+            print(f"📷 Loading frames from {frames_json_path.name} (legacy format)")
+            warnings.warn("Using legacy JSON frames format. Consider re-exporting dataset.")
+            
+            with open(frames_json_path, 'r') as f:
+                frames_manifest = json.load(f)
+            
+            frames_list = []
+            for frame_info in frames_manifest:
+                # Decode base64 to NumPy array
+                data_bytes = base64.b64decode(frame_info['data_base64'])
+                data = np.frombuffer(data_bytes, dtype=np.uint8)
+                
+                # Reshape to image
+                h, w, c = frame_info['shape']
+                image = data.reshape((h, w, c))
+                frames_list.append(image)
+            
+            return np.stack(frames_list, axis=0) if frames_list else None
+        
+        warnings.warn("No frames file found")
+        return None
     
     def __len__(self) -> int:
         """Number of samples in dataset."""
@@ -117,10 +140,11 @@ class ReActureDataset:
         """
         sample = self.samples[idx].copy()
         
-        # Add frame if available
-        frame_path = sample.get('visual_frame_path')
-        if frame_path and frame_path in self.frames:
-            sample['frame'] = self.frames[frame_path]
+        # Add frame from frames array if available
+        if self.frames_array is not None and idx < len(self.frames_array):
+            sample['frame'] = self.frames_array[idx]
+            if self.frame_timestamps is not None and idx < len(self.frame_timestamps):
+                sample['frame_timestamp_ms'] = self.frame_timestamps[idx]
         else:
             sample['frame'] = None
         
@@ -225,19 +249,7 @@ class ReActureDataset:
         Returns:
             NumPy array of shape (N, H, W, 3) or None
         """
-        if not self.frames:
-            return None
-        
-        frame_list = []
-        for sample in self.samples:
-            frame_path = sample.get('visual_frame_path')
-            if frame_path and frame_path in self.frames:
-                frame_list.append(self.frames[frame_path])
-        
-        if not frame_list:
-            return None
-        
-        return np.stack(frame_list, axis=0)
+        return self.frames_array
     
     def to_pytorch_dataloader(self, batch_size: int = 32, shuffle: bool = True):
         """
@@ -431,26 +443,29 @@ class ReActureDataset:
             }
         }
     
-    def save_frames_as_npy(self, output_dir: str = 'frames'):
+    def save_frames_as_individual_npy(self, output_dir: str = 'frames'):
         """
-        Save all frames as individual .npy files.
+        Save frames as individual .npy files (one per frame).
         
         Args:
             output_dir: Directory to save frames
         """
+        if self.frames_array is None:
+            print("⚠️  No frames to save")
+            return
+        
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True)
         
-        for frame_path, frame_data in self.frames.items():
-            # Extract filename
-            filename = Path(frame_path).name
+        for i, frame in enumerate(self.frames_array):
+            filename = f"frame_{str(i).zfill(6)}.npy"
             output_file = output_path / filename
+            np.save(output_file, frame)
             
-            # Save as NumPy file
-            np.save(output_file, frame_data)
-            print(f"💾 Saved {output_file}")
+            if i % 100 == 0:
+                print(f"💾 Saved {i+1}/{len(self.frames_array)} frames...")
         
-        print(f"✅ Saved {len(self.frames)} frames to {output_dir}/")
+        print(f"✅ Saved {len(self.frames_array)} frames to {output_dir}/")
     
     def visualize_trajectory(self, save_path: Optional[str] = None):
         """
