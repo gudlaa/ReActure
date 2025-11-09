@@ -19,7 +19,7 @@ A gamified disaster response simulation platform with viral social features, ins
    ```bash
    python3 -m http.server 8000
    ```
-   
+
    Or use the provided script:
    ```bash
    ./start.sh

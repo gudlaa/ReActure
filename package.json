@@ -1,31 +1,23 @@
 {
   "name": "reacture",
   "version": "1.0.0",
-  "description": "A viral disaster response simulation game with ML dataset collection",
-  "type": "module",
+  "description": "Disaster Rescue Simulation - Gamified Data Collection for AI Training",
   "main": "index.html",
   "scripts": {
-    "dev": "python3 -m http.server 8000",
-    "start": "python3 -m http.server 8000"
+    "start": "python3 -m http.server 8000",
+    "serve": "npx http-server -p 8000"
   },
   "keywords": [
+    "ai",
+    "data-collection",
     "robotics",
-    "machine-learning",
-    "disaster-response",
-    "three.js",
-    "mongodb",
-    "dataset",
-    "game"
+    "simulation",
+    "threejs",
+    "gamification"
   ],
-  "author": "Anoushka Gudla",
+  "author": "",
   "license": "MIT",
   "dependencies": {
-    "mongoose": "^8.0.0",
-    "dotenv": "^16.4.5"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/gudlaa/ReActure.git"
-  },
-  "homepage": "https://github.com/gudlaa/ReActure#readme"
+    "mongodb": "^7.0.0"
+  }
 }

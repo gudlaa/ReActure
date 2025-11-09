@@ -3,10 +3,7 @@
  * Frontend service for communicating with MongoDB Atlas backend
  */
 
-// Automatically detect API URL based on environment
-const MONGODB_API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:3001/api'  // Local development
-    : '/api';  // Production (Vercel) - uses relative path
+const MONGODB_API_URL = 'http://localhost:3001/api';
 
 class MongoDBService {
     constructor() {
