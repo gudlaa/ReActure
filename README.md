@@ -10,7 +10,7 @@ A gamified disaster response simulation platform with viral social features, ins
 
 ### Running the Game
 
-1. **Navigate to the project directory**:
+1. **Navigate to the project directory**: 
    ```bash
    cd /Users/anoushkagudla/Desktop/ReActure/ReActure-1
    ```
