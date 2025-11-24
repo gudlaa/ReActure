@@ -418,7 +418,7 @@ MIT License - Created for hackathon submission.
 
 ## 🎉 Credits
 
-**Developed by**: [Your Name]  
+**Developed by**: Anoushka Gudla, Ritya Godala, Abhinav Maru, and Sneha Narayan  
 **Inspired by**: BeReal's viral engagement mechanics  
 **Built with**: Three.js, WebGL, and lots of ☕
 
